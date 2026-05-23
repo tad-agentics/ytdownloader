@@ -16,6 +16,12 @@ const FORMAT: Record<VideoQuality, string> = {
 
 const LANG_PRIORITY = ["en", "en-us", "en-gb", "vi", "vi-vn"];
 
+const PLAYER_CLIENTS = [
+  "android_vr,tv,ios,android",
+  "mweb,web_safari,web",
+  "web_embedded",
+];
+
 export interface DownloadResult {
   filePath: string;
   fileName: string;
@@ -27,6 +33,10 @@ export interface DownloadResult {
 
 function subtitleLangs(): string {
   return process.env.SUBTITLE_LANGS?.trim() || "en,vi,en.*,vi.*";
+}
+
+function isBotBlockError(message: string): boolean {
+  return /not a bot|Sign in to confirm|bot check|HTTP Error 403/i.test(message);
 }
 
 function pickSubtitleFile(stemPath: string): { filePath: string; lang: string } | null {
@@ -56,18 +66,15 @@ function pickSubtitleFile(stemPath: string): { filePath: string; lang: string } 
   return candidates[0];
 }
 
-export function downloadYouTubeVideo(
+function runYtdlpOnce(
   url: string,
   videoId: string,
-  quality: VideoQuality = "720p",
-  durationSeconds = 0,
-  timeoutMs?: number
+  quality: VideoQuality,
+  playerClients: string,
+  stemPath: string,
+  effectiveTimeout: number
 ): Promise<DownloadResult> {
-  const stamp = Date.now();
-  const stemPath = path.join(os.tmpdir(), `yt_${videoId}_${stamp}`);
   const template = `${stemPath}.%(ext)s`;
-  const effectiveTimeout = timeoutMs ?? downloadTimeoutMs(durationSeconds);
-
   const args = [
     "--format",
     FORMAT[quality],
@@ -80,7 +87,7 @@ export function downloadYouTubeVideo(
     "--convert-subs",
     "srt",
     "--extractor-args",
-    "youtube:player_client=android,web",
+    `youtube:player_client=${playerClients}`,
     "--output",
     template,
     "--no-playlist",
@@ -105,7 +112,9 @@ export function downloadYouTubeVideo(
   args.push(url);
 
   return new Promise((resolve, reject) => {
-    const proc = spawn("yt-dlp", args);
+    const proc = spawn("yt-dlp", args, {
+      env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
+    });
     let stderr = "";
     proc.stderr?.on("data", (d) => {
       stderr += d.toString();
@@ -117,7 +126,7 @@ export function downloadYouTubeVideo(
     proc.on("close", (code) => {
       clearTimeout(timer);
       if (code !== 0) {
-        return reject(new Error(`yt-dlp exit ${code}: ${stderr.slice(0, 300)}`));
+        return reject(new Error(`yt-dlp exit ${code}: ${stderr.slice(0, 400)}`));
       }
       const mp4 = `${stemPath}.mp4`;
       const mkv = `${stemPath}.mkv`;
@@ -139,6 +148,32 @@ export function downloadYouTubeVideo(
       reject(err);
     });
   });
+}
+
+export async function downloadYouTubeVideo(
+  url: string,
+  videoId: string,
+  quality: VideoQuality = "720p",
+  durationSeconds = 0,
+  timeoutMs?: number
+): Promise<DownloadResult> {
+  const stamp = Date.now();
+  const stemPath = path.join(os.tmpdir(), `yt_${videoId}_${stamp}`);
+  const effectiveTimeout = timeoutMs ?? downloadTimeoutMs(durationSeconds);
+  let lastError = "yt-dlp failed";
+
+  for (const clients of PLAYER_CLIENTS) {
+    try {
+      return await runYtdlpOnce(url, videoId, quality, clients, stemPath, effectiveTimeout);
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (!isBotBlockError(lastError)) {
+        throw err instanceof Error ? err : new Error(lastError);
+      }
+    }
+  }
+
+  throw new Error(lastError);
 }
 
 export function cleanupTempFile(p: string) {

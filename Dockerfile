@@ -1,10 +1,12 @@
 FROM node:20-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg python3 curl ca-certificates \
-  && curl -L "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" \
+    ffmpeg python3 curl ca-certificates unzip \
+  && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
      -o /usr/local/bin/yt-dlp \
   && chmod +x /usr/local/bin/yt-dlp \
+  && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s v2.2.3 \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
+ENV PATH="/usr/local/bin:${PATH}"
 
 FROM base AS deps
 WORKDIR /app

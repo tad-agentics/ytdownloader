@@ -99,6 +99,7 @@ export default function Page() {
     youtubeApi?: "ok" | "unconfigured" | "error";
     r2?: "ok" | "unconfigured" | "error";
     supabase?: "ok" | "unconfigured" | "error";
+    ytdlpCookies?: "ok" | "missing";
   }>({});
 
   const runRef = useRef(false);
@@ -124,6 +125,7 @@ export default function Page() {
           youtubeApi: status("youtubeApi"),
           r2: status("r2"),
           supabase: status("supabase"),
+          ytdlpCookies: data.checks?.ytdlpCookies?.status === "ok" ? "ok" : "missing",
         });
       })
       .catch(() => {});
@@ -339,6 +341,12 @@ export default function Page() {
           <div className="left">
             <div className="pg-title">Pipeline</div>
             <StepStrip phase={phase} />
+            {health.ytdlpCookies === "missing" && phase === "input" && (
+              <div className="cookie-warn">
+                YouTube downloads need cookies on Cloud Run. Export <code>cookies.txt</code>, set{" "}
+                <code>YT_DLP_COOKIES_FILE=./cookies.txt</code> in <code>.env.local</code>, then redeploy.
+              </div>
+            )}
             <KeywordInput
               keywords={keywords}
               onKeywordsChange={setKeywords}

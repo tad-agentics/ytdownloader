@@ -95,6 +95,10 @@ export async function GET() {
       ? { status: "unconfigured", detail: r2.error }
       : { status: "error", detail: r2.error };
 
+  checks.ytdlpCookies = isYtdlpCookiesConfigured()
+    ? { status: "ok", detail: "loaded" }
+    : { status: "unconfigured", detail: "export cookies.txt and redeploy" };
+
   const allOk = Object.values(checks).every((c) => c.status === "ok");
   const pipelineReady = checks.ytdlp?.status === "ok" && checks.supabase?.status === "ok";
 
