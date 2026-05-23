@@ -1,0 +1,37 @@
+{
+  "name": "ytdownloader",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:pipeline": "bash scripts/check-deps.sh && next dev",
+    "build": "next build",
+    "start": "next start",
+    "start:pipeline": "bash scripts/check-deps.sh && next start",
+    "lint": "next lint",
+    "setup:local": "bash scripts/setup-local.sh",
+    "check:deps": "bash scripts/check-deps.sh",
+    "docker:build": "docker compose build",
+    "docker:up": "bash scripts/docker-up.sh",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f ytdownloader"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1053.0",
+    "@aws-sdk/lib-storage": "^3.1053.0",
+    "@supabase/supabase-js": "^2.106.1",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "typescript": "^5"
+  }
+}
