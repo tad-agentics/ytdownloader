@@ -148,7 +148,7 @@ export default function Page() {
 
   const pollJobs = useCallback(async (): Promise<boolean> => {
     const ids = jobIdsRef.current;
-    if (!ids.length) return false;
+    if (!ids.length) return runRef.current;
 
     const results = await Promise.all(
       ids.map((id) => fetch(`/api/pipeline/jobs/${id}`).then((r) => r.json()))
@@ -258,7 +258,6 @@ export default function Page() {
     jobIdsRef.current = [];
     setCurrentJobIds([]);
     setPhase("searching");
-    setIsPolling(true);
 
     const res = await fetch("/api/pipeline/scrape", {
       method: "POST",
@@ -268,7 +267,6 @@ export default function Page() {
     const data = await res.json();
     if (!res.ok) {
       runRef.current = false;
-      setIsPolling(false);
       setPhase("input");
       return;
     }
@@ -276,6 +274,7 @@ export default function Page() {
     const ids = (data.jobs || []).map((j: { jobId: string }) => j.jobId);
     jobIdsRef.current = ids;
     setCurrentJobIds(ids);
+    setIsPolling(true);
   };
 
   const isRunning = ["searching", "processing", "results"].includes(phase);
