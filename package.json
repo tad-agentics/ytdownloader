@@ -14,7 +14,8 @@
     "docker:build": "docker compose build",
     "docker:up": "bash scripts/docker-up.sh",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f ytdownloader"
+    "docker:logs": "docker compose logs -f ytdownloader",
+    "deploy:cloud-run": "bash scripts/deploy-cloud-run.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1053.0",
