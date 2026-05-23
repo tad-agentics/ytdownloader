@@ -112,7 +112,7 @@ export default function KeywordInput({
           onChange={(e) => onMaxResultsChange(parseInt(e.target.value, 10))}
           disabled={isRunning}
         >
-          {["5", "8", "10", "20", "50"].map((v) => (
+          {["2", "5", "8", "10", "20", "50"].map((v) => (
             <option key={v} value={v}>
               {v} videos / keyword
             </option>
