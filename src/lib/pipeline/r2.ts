@@ -34,7 +34,7 @@ const client = () => {
   return _client;
 };
 
-const BUCKET = () => process.env.R2_BUCKET_NAME?.trim() || "yt-downloader-corpus";
+const BUCKET = () => process.env.R2_BUCKET_NAME?.trim() || "ytdownloader";
 
 export async function uploadToR2(
   filePath: string,
