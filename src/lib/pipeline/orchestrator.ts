@@ -28,7 +28,7 @@ export async function runPipelineJob(
   keyword: string,
   opts: { maxResults?: number; quality?: VideoQuality; regionCode?: string } = {}
 ): Promise<void> {
-  const { maxResults = 10, quality = "720p", regionCode = "VN" } = opts;
+  const { maxResults = 10, quality = "720p", regionCode = "US" } = opts;
   await createJob(jobId, keyword, maxResults, quality, regionCode);
 
   try {

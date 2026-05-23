@@ -1,5 +1,40 @@
 const BASE = "https://www.googleapis.com/youtube/v3";
 
+const REGION_LANGUAGE: Record<string, string> = {
+  US: "en",
+  GB: "en",
+  AU: "en",
+  CA: "en",
+  IN: "en",
+  SG: "en",
+  VN: "vi",
+  JP: "ja",
+  KR: "ko",
+  TH: "th",
+  ID: "id",
+  DE: "de",
+  FR: "fr",
+};
+
+export const YOUTUBE_REGION_OPTIONS = [
+  { code: "US", label: "United States" },
+  { code: "GB", label: "United Kingdom" },
+  { code: "AU", label: "Australia" },
+  { code: "SG", label: "Singapore" },
+  { code: "IN", label: "India" },
+  { code: "JP", label: "Japan" },
+  { code: "KR", label: "South Korea" },
+  { code: "VN", label: "Vietnam" },
+  { code: "TH", label: "Thailand" },
+  { code: "ID", label: "Indonesia" },
+  { code: "DE", label: "Germany" },
+  { code: "FR", label: "France" },
+] as const;
+
+function relevanceLanguageForRegion(regionCode: string): string {
+  return REGION_LANGUAGE[regionCode.toUpperCase()] || "en";
+}
+
 function getApiKey(): string {
   const keys = [
     process.env.YOUTUBE_API_KEY_1,
@@ -44,11 +79,12 @@ export async function searchYouTubeVideos(
 ): Promise<YouTubeVideo[]> {
   const {
     maxResults = 10,
-    regionCode = "VN",
-    relevanceLanguage = "vi",
+    regionCode = "US",
+    relevanceLanguage,
     order = "relevance",
     videoDuration = "any",
   } = options;
+  const language = relevanceLanguage || relevanceLanguageForRegion(regionCode);
   const key = getApiKey();
 
   const sp = new URLSearchParams({
@@ -58,7 +94,7 @@ export async function searchYouTubeVideos(
     type: "video",
     maxResults: String(Math.min(maxResults, 50)),
     regionCode,
-    relevanceLanguage,
+    relevanceLanguage: language,
     order,
     videoDuration,
     videoEmbeddable: "true",

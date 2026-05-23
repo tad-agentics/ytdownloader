@@ -6,7 +6,7 @@ import type { VideoQuality } from "@/lib/pipeline/downloader";
 const MAX_VIDEOS_PER_JOB = 30;
 
 export async function POST(req: NextRequest) {
-  const { keywords, maxResults = 10, quality = "720p", regionCode = "VN" } = await req.json();
+  const { keywords, maxResults = 10, quality = "720p", regionCode = "US" } = await req.json();
   if (!Array.isArray(keywords) || !keywords.length) {
     return NextResponse.json({ error: "keywords[] required" }, { status: 400 });
   }

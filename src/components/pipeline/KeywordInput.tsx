@@ -10,6 +10,9 @@ interface KeywordInputProps {
   onMaxResultsChange: (n: number) => void;
   quality: string;
   onQualityChange: (q: string) => void;
+  regionCode: string;
+  onRegionCodeChange: (code: string) => void;
+  regionOptions: ReadonlyArray<{ code: string; label: string }>;
   isRunning: boolean;
   onRun: () => void;
   onReset: () => void;
@@ -25,6 +28,9 @@ export default function KeywordInput({
   onMaxResultsChange,
   quality,
   onQualityChange,
+  regionCode,
+  onRegionCodeChange,
+  regionOptions,
   isRunning,
   onRun,
   onReset,
@@ -109,6 +115,18 @@ export default function KeywordInput({
           {["5", "8", "10", "20", "50"].map((v) => (
             <option key={v} value={v}>
               {v} videos / keyword
+            </option>
+          ))}
+        </select>
+        <select
+          className="sel"
+          value={regionCode}
+          onChange={(e) => onRegionCodeChange(e.target.value)}
+          disabled={isRunning}
+        >
+          {regionOptions.map(({ code, label }) => (
+            <option key={code} value={code}>
+              {code} · {label}
             </option>
           ))}
         </select>

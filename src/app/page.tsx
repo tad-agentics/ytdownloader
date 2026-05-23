@@ -9,6 +9,7 @@ import StorageOverview from "@/components/storage/StorageOverview";
 import StatCards from "@/components/storage/StatCards";
 import AllocationBars from "@/components/storage/AllocationBars";
 import type { PipelineJob, PipelineVideo } from "@/lib/pipeline/types";
+import { YOUTUBE_REGION_OPTIONS } from "@/lib/pipeline/youtube-search";
 
 const TERMINAL_JOB_STATUSES = ["done", "failed", "stopped"];
 
@@ -80,6 +81,7 @@ export default function Page() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [maxResults, setMaxResults] = useState(8);
   const [quality, setQuality] = useState("720p");
+  const [regionCode, setRegionCode] = useState("US");
   const [videos, setVideos] = useState<VideoState[]>([]);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [videoSummary, setVideoSummary] = useState<
@@ -261,7 +263,7 @@ export default function Page() {
     const res = await fetch("/api/pipeline/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keywords, maxResults, quality, regionCode: "VN" }),
+      body: JSON.stringify({ keywords, maxResults, quality, regionCode }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -323,7 +325,7 @@ export default function Page() {
             <span className={`hdot ${dotClass(health.r2)}`} />
             R2 · {serviceLabel(health.r2, { ok: "connected", unconfigured: "not configured", error: "offline" })}
           </div>
-          <div className="hpill">VN · {quality}</div>
+          <div className="hpill">{regionCode} · {quality}</div>
         </div>
       </header>
 
@@ -339,6 +341,9 @@ export default function Page() {
               onMaxResultsChange={setMaxResults}
               quality={quality}
               onQualityChange={setQuality}
+              regionCode={regionCode}
+              onRegionCodeChange={setRegionCode}
+              regionOptions={YOUTUBE_REGION_OPTIONS}
               isRunning={isRunning}
               onRun={handleRun}
               onReset={handleReset}
@@ -354,7 +359,7 @@ export default function Page() {
                   Searching YouTube for {keywords.length} keyword{keywords.length > 1 ? "s" : ""}…
                 </span>
                 <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
-                  youtube.com/v3/search · region=VN
+                  youtube.com/v3/search · region={regionCode}
                 </span>
               </div>
             )}
