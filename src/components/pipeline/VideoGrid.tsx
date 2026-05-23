@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { friendlyDownloadError } from "@/lib/pipeline/duration-limits";
 
 export interface VideoState {
   videoId: string;
@@ -16,6 +17,7 @@ export interface VideoState {
   transcriptStatus: "pending" | "stored" | "missing" | "failed";
   transcriptLang: string | null;
   transcriptUrl: string | null;
+  error: string | null;
 }
 
 const fmtNum = (n: number) =>
@@ -71,6 +73,11 @@ function VideoCard({ v }: { v: VideoState }) {
           <span>{fmtNum(v.views)}</span>
           <span>{v.estimatedMb > 0 ? `${v.estimatedMb} MB` : "—"}</span>
         </div>
+        {v.status === "failed" && v.error && (
+          <div className="verror" title={v.error}>
+            {friendlyDownloadError(v.error)}
+          </div>
+        )}
         {v.status === "done" && (
           <div className="vtranscript">
             {v.transcriptStatus === "stored" ? (

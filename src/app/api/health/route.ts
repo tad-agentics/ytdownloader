@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { execSync } from "child_process";
 import { createClient } from "@supabase/supabase-js";
 import { pingR2 } from "@/lib/pipeline/r2";
+import { isYtdlpCookiesConfigured } from "@/lib/pipeline/ytdlp-cookies";
 
 type CheckStatus = "ok" | "unconfigured" | "error";
 
@@ -72,7 +73,11 @@ export async function GET() {
 
   try {
     const ver = execSync("yt-dlp --version", { timeout: 5000 }).toString().trim();
-    checks.ytdlp = { status: "ok", detail: ver };
+    const cookies = isYtdlpCookiesConfigured();
+    checks.ytdlp = {
+      status: "ok",
+      detail: cookies ? `${ver} · cookies loaded` : `${ver} · no cookies (bot risk)`,
+    };
   } catch (e: unknown) {
     checks.ytdlp = {
       status: "error",

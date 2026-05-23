@@ -10,6 +10,10 @@ import StatCards from "@/components/storage/StatCards";
 import AllocationBars from "@/components/storage/AllocationBars";
 import type { PipelineJob, PipelineVideo } from "@/lib/pipeline/types";
 import { YOUTUBE_REGION_OPTIONS } from "@/lib/pipeline/youtube-search";
+import {
+  DEFAULT_MAX_DURATION_SECONDS,
+  MAX_DURATION_OPTIONS,
+} from "@/lib/pipeline/duration-limits";
 
 const TERMINAL_JOB_STATUSES = ["done", "failed", "stopped"];
 
@@ -42,6 +46,7 @@ function mapDbVideo(v: PipelineVideo): VideoState {
     transcriptStatus: v.transcript_status || "pending",
     transcriptLang: v.transcript_lang,
     transcriptUrl: v.transcript_public_url,
+    error: v.error,
   };
 }
 
@@ -80,6 +85,7 @@ export default function Page() {
   const [phase, setPhase] = useState<Phase>("input");
   const [keywords, setKeywords] = useState<string[]>([]);
   const [maxResults, setMaxResults] = useState(8);
+  const [maxDurationSeconds, setMaxDurationSeconds] = useState(DEFAULT_MAX_DURATION_SECONDS);
   const [quality, setQuality] = useState("720p");
   const [regionCode, setRegionCode] = useState("US");
   const [videos, setVideos] = useState<VideoState[]>([]);
@@ -262,7 +268,7 @@ export default function Page() {
     const res = await fetch("/api/pipeline/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keywords, maxResults, quality, regionCode }),
+      body: JSON.stringify({ keywords, maxResults, quality, regionCode, maxDurationSeconds }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -338,6 +344,9 @@ export default function Page() {
               onKeywordsChange={setKeywords}
               maxResults={maxResults}
               onMaxResultsChange={setMaxResults}
+              maxDurationSeconds={maxDurationSeconds}
+              onMaxDurationSecondsChange={setMaxDurationSeconds}
+              maxDurationOptions={MAX_DURATION_OPTIONS}
               quality={quality}
               onQualityChange={setQuality}
               regionCode={regionCode}

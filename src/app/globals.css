@@ -508,6 +508,14 @@ body {
   color: #b45309;
 }
 
+.verror {
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.35;
+  font-family: var(--m);
+  color: #991b1b;
+}
+
 .vprog-bar {
   height: 2px;
   background: #f0f0f0;

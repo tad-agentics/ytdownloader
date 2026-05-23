@@ -26,14 +26,24 @@ async function shouldStop(jobId: string): Promise<boolean> {
 export async function runPipelineJob(
   jobId: string,
   keyword: string,
-  opts: { maxResults?: number; quality?: VideoQuality; regionCode?: string } = {}
+  opts: {
+    maxResults?: number;
+    quality?: VideoQuality;
+    regionCode?: string;
+    maxDurationSeconds?: number;
+  } = {}
 ): Promise<void> {
-  const { maxResults = 10, quality = "720p", regionCode = "US" } = opts;
+  const {
+    maxResults = 10,
+    quality = "720p",
+    regionCode = "US",
+    maxDurationSeconds = 1200,
+  } = opts;
   await createJob(jobId, keyword, maxResults, quality, regionCode);
 
   try {
     await updateJob(jobId, { status: "searching" });
-    const videos = await searchYouTubeVideos(keyword, { maxResults, regionCode });
+    const videos = await searchYouTubeVideos(keyword, { maxResults, regionCode, maxDurationSeconds });
     await updateJob(jobId, { status: "downloading", videos_found: videos.length });
 
     if (!videos.length) {
@@ -59,7 +69,12 @@ export async function runPipelineJob(
       let tmpStemPath: string | null = null;
       try {
         await updateVideoStatus(jobId, video.videoId, { status: "downloading" });
-        const dl = await downloadYouTubeVideo(video.url, video.videoId, quality);
+        const dl = await downloadYouTubeVideo(
+          video.url,
+          video.videoId,
+          quality,
+          video.durationSeconds
+        );
         tmpPath = dl.filePath;
         tmpTranscriptPath = dl.transcriptPath;
         tmpStemPath = tmpPath.replace(/\.(mp4|mkv)$/i, "");

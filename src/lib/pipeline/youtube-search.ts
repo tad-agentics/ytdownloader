@@ -75,6 +75,7 @@ export async function searchYouTubeVideos(
     relevanceLanguage?: string;
     order?: "relevance" | "viewCount" | "date";
     videoDuration?: "any" | "short" | "medium" | "long";
+    maxDurationSeconds?: number;
   } = {}
 ): Promise<YouTubeVideo[]> {
   const {
@@ -82,9 +83,20 @@ export async function searchYouTubeVideos(
     regionCode = "US",
     relevanceLanguage,
     order = "relevance",
-    videoDuration = "any",
+    videoDuration,
+    maxDurationSeconds = 0,
   } = options;
   const language = relevanceLanguage || relevanceLanguageForRegion(regionCode);
+  const durationFilter = maxDurationSeconds > 0 ? maxDurationSeconds : 0;
+  const apiDuration =
+    videoDuration ||
+    (durationFilter > 0 && durationFilter <= 240
+      ? "short"
+      : durationFilter > 0 && durationFilter <= 1200
+        ? "medium"
+        : "any");
+  const fetchCount =
+    durationFilter > 0 ? Math.min(Math.max(maxResults * 3, maxResults), 50) : maxResults;
   const key = getApiKey();
 
   const sp = new URLSearchParams({
@@ -92,11 +104,11 @@ export async function searchYouTubeVideos(
     q: keyword,
     part: "snippet",
     type: "video",
-    maxResults: String(Math.min(maxResults, 50)),
+    maxResults: String(fetchCount),
     regionCode,
     relevanceLanguage: language,
     order,
-    videoDuration,
+    videoDuration: apiDuration,
     videoEmbeddable: "true",
   });
   const sr = await fetch(`${BASE}/search?${sp}`);
@@ -141,5 +153,7 @@ export async function searchYouTubeVideos(
         durationSeconds: parseDuration(iso),
       };
     })
-    .filter((v): v is YouTubeVideo => v !== null);
+    .filter((v): v is YouTubeVideo => v !== null)
+    .filter((v) => !durationFilter || v.durationSeconds <= durationFilter)
+    .slice(0, maxResults);
 }

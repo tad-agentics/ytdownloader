@@ -2,6 +2,8 @@ import { spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { downloadTimeoutMs } from "./duration-limits";
+import { getYtdlpCookiesPath } from "./ytdlp-cookies";
 
 export type VideoQuality = "360p" | "480p" | "720p" | "1080p";
 
@@ -58,11 +60,14 @@ export function downloadYouTubeVideo(
   url: string,
   videoId: string,
   quality: VideoQuality = "720p",
-  timeoutMs = 5 * 60 * 1000
+  durationSeconds = 0,
+  timeoutMs?: number
 ): Promise<DownloadResult> {
   const stamp = Date.now();
   const stemPath = path.join(os.tmpdir(), `yt_${videoId}_${stamp}`);
   const template = `${stemPath}.%(ext)s`;
+  const effectiveTimeout = timeoutMs ?? downloadTimeoutMs(durationSeconds);
+
   const args = [
     "--format",
     FORMAT[quality],
@@ -74,6 +79,8 @@ export function downloadYouTubeVideo(
     subtitleLangs(),
     "--convert-subs",
     "srt",
+    "--extractor-args",
+    "youtube:player_client=android,web",
     "--output",
     template,
     "--no-playlist",
@@ -87,9 +94,15 @@ export function downloadYouTubeVideo(
     "--concurrent-fragments",
     "4",
     "--user-agent",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    url,
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   ];
+
+  const cookiesPath = getYtdlpCookiesPath();
+  if (cookiesPath) {
+    args.push("--cookies", cookiesPath);
+  }
+
+  args.push(url);
 
   return new Promise((resolve, reject) => {
     const proc = spawn("yt-dlp", args);
@@ -100,7 +113,7 @@ export function downloadYouTubeVideo(
     const timer = setTimeout(() => {
       proc.kill("SIGTERM");
       reject(new Error(`yt-dlp timeout for ${videoId}`));
-    }, timeoutMs);
+    }, effectiveTimeout);
     proc.on("close", (code) => {
       clearTimeout(timer);
       if (code !== 0) {

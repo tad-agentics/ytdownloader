@@ -8,6 +8,9 @@ interface KeywordInputProps {
   onKeywordsChange: (keywords: string[]) => void;
   maxResults: number;
   onMaxResultsChange: (n: number) => void;
+  maxDurationSeconds: number;
+  onMaxDurationSecondsChange: (n: number) => void;
+  maxDurationOptions: ReadonlyArray<{ seconds: number; label: string }>;
   quality: string;
   onQualityChange: (q: string) => void;
   regionCode: string;
@@ -26,6 +29,9 @@ export default function KeywordInput({
   onKeywordsChange,
   maxResults,
   onMaxResultsChange,
+  maxDurationSeconds,
+  onMaxDurationSecondsChange,
+  maxDurationOptions,
   quality,
   onQualityChange,
   regionCode,
@@ -115,6 +121,18 @@ export default function KeywordInput({
           {["2", "5", "8", "10", "20", "50"].map((v) => (
             <option key={v} value={v}>
               {v} videos / keyword
+            </option>
+          ))}
+        </select>
+        <select
+          className="sel"
+          value={String(maxDurationSeconds)}
+          onChange={(e) => onMaxDurationSecondsChange(parseInt(e.target.value, 10))}
+          disabled={isRunning}
+        >
+          {maxDurationOptions.map(({ seconds, label }) => (
+            <option key={seconds} value={seconds}>
+              {label}
             </option>
           ))}
         </select>
