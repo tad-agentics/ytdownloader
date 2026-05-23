@@ -45,6 +45,10 @@ export interface PipelineVideo {
   r2_key: string | null;
   r2_public_url: string | null;
   file_size_bytes: number;
+  transcript_r2_key: string | null;
+  transcript_public_url: string | null;
+  transcript_lang: string | null;
+  transcript_status: "pending" | "stored" | "missing" | "failed";
   status: VideoStatus;
   error: string | null;
   created_at: string;

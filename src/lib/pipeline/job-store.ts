@@ -57,6 +57,10 @@ export async function recordVideo(video: {
   r2_key: string | null;
   r2_public_url: string | null;
   file_size_bytes: number;
+  transcript_r2_key: string | null;
+  transcript_public_url: string | null;
+  transcript_lang: string | null;
+  transcript_status: "pending" | "stored" | "missing" | "failed";
   status: VideoStatus;
   error: string | null;
 }) {
@@ -87,6 +91,10 @@ export async function insertPendingVideos(
     r2_key: null,
     r2_public_url: null,
     file_size_bytes: 0,
+    transcript_r2_key: null,
+    transcript_public_url: null,
+    transcript_lang: null,
+    transcript_status: "pending" as const,
     status: "pending" as const,
     error: null,
   }));
@@ -102,6 +110,10 @@ export async function updateVideoStatus(
     r2_key: string | null;
     r2_public_url: string | null;
     file_size_bytes: number;
+    transcript_r2_key: string | null;
+    transcript_public_url: string | null;
+    transcript_lang: string | null;
+    transcript_status: "pending" | "stored" | "missing" | "failed";
     error: string | null;
   }>
 ) {

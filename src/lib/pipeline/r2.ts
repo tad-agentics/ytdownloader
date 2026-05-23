@@ -36,16 +36,20 @@ const client = () => {
 
 const BUCKET = () => process.env.R2_BUCKET_NAME?.trim() || "ytdownloader";
 
+function keywordSlug(keyword: string): string {
+  return keyword
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export async function uploadToR2(
   filePath: string,
   keyword: string,
   videoId: string,
   metadata: Record<string, string> = {}
 ): Promise<{ r2Key: string; publicUrl: string; fileSizeBytes: number }> {
-  const slug = keyword
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+  const slug = keywordSlug(keyword);
   const r2Key = `${slug}/${videoId}_${Date.now()}.mp4`;
   const fileSizeBytes = fs.statSync(filePath).size;
 
@@ -67,6 +71,48 @@ export async function uploadToR2(
     },
     queueSize: 4,
     partSize: 10 * 1024 * 1024,
+  }).done();
+
+  const domain = process.env.R2_PUBLIC_DOMAIN;
+  return {
+    r2Key,
+    publicUrl: domain ? `https://${domain}/${r2Key}` : `r2://${BUCKET()}/${r2Key}`,
+    fileSizeBytes,
+  };
+}
+
+export async function uploadTranscriptToR2(
+  filePath: string,
+  keyword: string,
+  videoId: string,
+  lang: string,
+  metadata: Record<string, string> = {}
+): Promise<{ r2Key: string; publicUrl: string; fileSizeBytes: number }> {
+  const slug = keywordSlug(keyword);
+  const safeLang = lang.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 16) || "und";
+  const r2Key = `${slug}/${videoId}_${Date.now()}.${safeLang}.srt`;
+  const fileSizeBytes = fs.statSync(filePath).size;
+
+  await new Upload({
+    client: client(),
+    params: {
+      Bucket: BUCKET(),
+      Key: r2Key,
+      Body: fs.createReadStream(filePath),
+      ContentType: "text/plain; charset=utf-8",
+      ContentLength: fileSizeBytes,
+      Metadata: {
+        keyword,
+        videoId,
+        lang: safeLang,
+        type: "transcript",
+        pipeline: "ytdownloader-v1",
+        uploadedAt: new Date().toISOString(),
+        ...metadata,
+      },
+    },
+    queueSize: 2,
+    partSize: 5 * 1024 * 1024,
   }).done();
 
   const domain = process.env.R2_PUBLIC_DOMAIN;

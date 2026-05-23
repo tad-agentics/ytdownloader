@@ -484,6 +484,30 @@ body {
   color: #991b1b;
 }
 
+.vtranscript {
+  margin-top: 4px;
+  font-size: 9px;
+  font-family: var(--m);
+}
+
+.vtranscript-link,
+.vtranscript-ok {
+  color: var(--teal-dk);
+  text-decoration: none;
+}
+
+.vtranscript-link:hover {
+  text-decoration: underline;
+}
+
+.vtranscript-missing {
+  color: var(--tx3);
+}
+
+.vtranscript-failed {
+  color: #b45309;
+}
+
 .vprog-bar {
   height: 2px;
   background: #f0f0f0;

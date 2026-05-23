@@ -13,6 +13,9 @@ export interface VideoState {
   status: "queued" | "downloading" | "uploading" | "done" | "failed";
   progress: number;
   r2Key: string | null;
+  transcriptStatus: "pending" | "stored" | "missing" | "failed";
+  transcriptLang: string | null;
+  transcriptUrl: string | null;
 }
 
 const fmtNum = (n: number) =>
@@ -68,6 +71,23 @@ function VideoCard({ v }: { v: VideoState }) {
           <span>{fmtNum(v.views)}</span>
           <span>{v.estimatedMb > 0 ? `${v.estimatedMb} MB` : "—"}</span>
         </div>
+        {v.status === "done" && (
+          <div className="vtranscript">
+            {v.transcriptStatus === "stored" ? (
+              v.transcriptUrl ? (
+                <a href={v.transcriptUrl} target="_blank" rel="noreferrer" className="vtranscript-link">
+                  CC · {v.transcriptLang || "srt"}
+                </a>
+              ) : (
+                <span className="vtranscript-ok">CC · {v.transcriptLang || "srt"}</span>
+              )
+            ) : v.transcriptStatus === "missing" ? (
+              <span className="vtranscript-missing">No transcript</span>
+            ) : v.transcriptStatus === "failed" ? (
+              <span className="vtranscript-failed">Transcript failed</span>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );

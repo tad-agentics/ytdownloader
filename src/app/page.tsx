@@ -38,6 +38,9 @@ function mapDbVideo(v: PipelineVideo): VideoState {
     status,
     progress: status === "done" ? 100 : 0,
     r2Key: v.r2_key,
+    transcriptStatus: v.transcript_status || "pending",
+    transcriptLang: v.transcript_lang,
+    transcriptUrl: v.transcript_public_url,
   };
 }
 
@@ -276,6 +279,7 @@ export default function Page() {
   const isRunning = ["searching", "processing", "results"].includes(phase);
   const done = videos.filter((v) => v.status === "done").length;
   const failed = videos.filter((v) => v.status === "failed").length;
+  const transcripts = videos.filter((v) => v.transcriptStatus === "stored").length;
   const total = videos.length;
   const active = videos.filter((v) => ["downloading", "uploading"].includes(v.status)).length;
   const storedMb = videos
@@ -370,6 +374,7 @@ export default function Page() {
                   </span>
                   <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
                     {done} stored
+                    {transcripts > 0 ? ` · ${transcripts} transcripts` : ""}
                     {failed > 0 ? ` · ${failed} failed` : ""}
                     {total - done - failed > 0 ? ` · ${total - done - failed} pending` : ""}
                   </span>
@@ -393,7 +398,7 @@ export default function Page() {
                 <br />
                 YTDownloader will search YouTube, download each video,
                 <br />
-                and upload it to your Cloudflare R2 bucket.
+                fetch transcripts when available, and upload to R2.
               </div>
             )}
           </div>
