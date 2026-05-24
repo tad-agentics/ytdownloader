@@ -112,66 +112,70 @@ export default function KeywordInput({
       </div>
 
       <div className="cfg-run">
-        <select
-          className="sel"
-          value={String(maxResults)}
-          onChange={(e) => onMaxResultsChange(parseInt(e.target.value, 10))}
-          disabled={isRunning}
-        >
-          {["2", "5", "8", "10", "20", "50"].map((v) => (
-            <option key={v} value={v}>
-              {v} videos / keyword
-            </option>
-          ))}
-        </select>
-        <select
-          className="sel"
-          value={String(maxDurationSeconds)}
-          onChange={(e) => onMaxDurationSecondsChange(parseInt(e.target.value, 10))}
-          disabled={isRunning}
-        >
-          {maxDurationOptions.map(({ seconds, label }) => (
-            <option key={seconds} value={seconds}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="sel"
-          value={regionCode}
-          onChange={(e) => onRegionCodeChange(e.target.value)}
-          disabled={isRunning}
-        >
-          {regionOptions.map(({ code, label }) => (
-            <option key={code} value={code}>
-              {code} · {label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="sel"
-          value={quality}
-          onChange={(e) => onQualityChange(e.target.value)}
-          disabled={isRunning}
-        >
-          {["360p", "480p", "720p", "1080p"].map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-        <button
-          className={`run-btn${isRunning ? " running" : ""}`}
-          onClick={handleRunClick}
-          disabled={isRunning || (phase !== "done" && phase !== "stopped" && keywords.length === 0)}
-        >
-          {runLabel}
-        </button>
-        {isRunning && (
-          <button className="stop-btn" onClick={onStop}>
-            ■ Stop
+        <div className="cfg-controls">
+          <select
+            className="sel"
+            value={String(maxResults)}
+            onChange={(e) => onMaxResultsChange(parseInt(e.target.value, 10))}
+            disabled={isRunning}
+          >
+            {["2", "5", "8", "10", "20", "50"].map((v) => (
+              <option key={v} value={v}>
+                {v} videos / keyword
+              </option>
+            ))}
+          </select>
+          <select
+            className="sel"
+            value={String(maxDurationSeconds)}
+            onChange={(e) => onMaxDurationSecondsChange(parseInt(e.target.value, 10))}
+            disabled={isRunning}
+          >
+            {maxDurationOptions.map(({ seconds, label }) => (
+              <option key={seconds} value={seconds}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="sel"
+            value={regionCode}
+            onChange={(e) => onRegionCodeChange(e.target.value)}
+            disabled={isRunning}
+          >
+            {regionOptions.map(({ code, label }) => (
+              <option key={code} value={code}>
+                {code} · {label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="sel"
+            value={quality}
+            onChange={(e) => onQualityChange(e.target.value)}
+            disabled={isRunning}
+          >
+            {["360p", "480p", "720p", "1080p"].map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="cfg-actions">
+          <button
+            className={`run-btn${isRunning ? " running" : ""}`}
+            onClick={handleRunClick}
+            disabled={isRunning || (phase !== "done" && phase !== "stopped" && keywords.length === 0)}
+          >
+            {runLabel}
           </button>
-        )}
+          {isRunning && (
+            <button className="stop-btn" onClick={onStop}>
+              ■ Stop
+            </button>
+          )}
+        </div>
       </div>
     </>
   );

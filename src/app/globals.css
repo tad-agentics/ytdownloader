@@ -151,6 +151,8 @@ body {
 .step-strip {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 2px;
   margin-bottom: 16px;
 }
 
@@ -282,9 +284,22 @@ body {
 
 .cfg-run {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 18px;
+}
+
+.cfg-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cfg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .sel {
@@ -297,6 +312,8 @@ body {
   color: var(--tx);
   outline: none;
   cursor: pointer;
+  width: 100%;
+  min-width: 0;
 }
 
 .sel:focus {
@@ -308,7 +325,6 @@ body {
 }
 
 .run-btn {
-  margin-left: auto;
   background: var(--black);
   color: #fff;
   border: none;
@@ -322,6 +338,8 @@ body {
   white-space: nowrap;
   position: relative;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 
 .run-btn:hover:not(:disabled) {
@@ -407,8 +425,30 @@ body {
 
 .vgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 9px;
+}
+
+.vgrid-hdr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+
+.vgrid-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.vgrid-meta {
+  font-size: 11px;
+  color: var(--tx3);
+  font-family: var(--m);
+  line-height: 1.4;
 }
 
 .vcard {
@@ -896,4 +936,107 @@ body {
 .btn.add:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+@media (min-width: 720px) {
+  .cfg-controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .cfg-actions {
+    justify-content: flex-end;
+  }
+
+  .run-btn {
+    flex: 0 1 auto;
+  }
+}
+
+@media (max-width: 1024px) {
+  .card {
+    flex-direction: column;
+    gap: 24px;
+    padding: 22px;
+  }
+
+  .vdiv {
+    display: none;
+  }
+
+  .right {
+    width: 100%;
+    border-top: 1px solid var(--bdr);
+    padding-top: 20px;
+  }
+
+  .stor-row {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .pg-title,
+  .r-title {
+    font-size: 20px;
+  }
+
+  .hdr {
+    height: auto;
+    min-height: 52px;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .hbadges {
+    margin-left: 0;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .cfg-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .cfg-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .run-btn,
+  .stop-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .prog-summary {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .prog-label:last-child {
+    flex-basis: 100%;
+  }
+
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alloc-leg {
+    display: none;
+  }
+
+  .vgrid {
+    grid-template-columns: 1fr;
+  }
 }

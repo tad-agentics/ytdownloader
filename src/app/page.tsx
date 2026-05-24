@@ -382,18 +382,11 @@ export default function Page() {
 
             {videos.length > 0 && (
               <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 10,
-                  }}
-                >
-                  <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-.3px" }}>
+                <div className="vgrid-hdr">
+                  <span className="vgrid-title">
                     {total} video{total > 1 ? "s" : ""} found
                   </span>
-                  <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
+                  <span className="vgrid-meta">
                     {done} stored
                     {transcripts > 0 ? ` · ${transcripts} transcripts` : ""}
                     {failed > 0 ? ` · ${failed} failed` : ""}
