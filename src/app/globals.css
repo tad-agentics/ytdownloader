@@ -423,6 +423,217 @@ body {
   line-height: 1.8;
 }
 
+.history-section {
+  margin-top: 4px;
+}
+
+.select-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.select-btn {
+  border: 1px solid var(--bdr);
+  background: #fff;
+  color: var(--tx2);
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.select-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal-dk);
+}
+
+.vcard.selectable {
+  cursor: pointer;
+}
+
+.vcard.selectable.selected {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.35);
+}
+
+.vselect-mark {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vselect-mark.on {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--teal-dk);
+}
+
+.vkeyword-tag {
+  font-size: 10px;
+  color: var(--tx3);
+  font-family: var(--m);
+  margin-top: 2px;
+}
+
+.vmedia-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.vmedia-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 5px;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.vmedia-btn.video {
+  background: #ecfeff;
+  color: #0f766e;
+  border-color: #99f6e4;
+}
+
+.vmedia-btn.transcript {
+  background: #f5f3ff;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+}
+
+.vmedia-btn:hover {
+  filter: brightness(0.97);
+}
+
+.vmedia-muted {
+  font-size: 10px;
+  color: var(--tx3);
+  align-self: center;
+}
+
+.vdel-action {
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: #b91c1c;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vdel-action:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.vdel-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.modal-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #b45309;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.modal-message {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tx2);
+  margin: 0 0 18px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-btn {
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.modal-btn.cancel {
+  background: #f1f5f9;
+  color: var(--tx2);
+}
+
+.modal-btn.cancel:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.modal-btn.danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.modal-btn.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.modal-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .vgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -507,6 +718,34 @@ body {
   padding: 1px 5px;
   border-radius: 3px;
   z-index: 1;
+}
+
+.vdel-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.vdel-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(185, 28, 28, 0.92);
+}
+
+.vdel-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .vstatus-badge {
@@ -678,6 +917,16 @@ body {
 .stop-btn:hover {
   background: #fff1f2;
   border-color: #f87171;
+}
+
+.stop-btn.secondary {
+  color: var(--tx2);
+  border-color: var(--bdr);
+}
+
+.stop-btn.secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .vdiv {

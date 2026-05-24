@@ -1,4 +1,4 @@
-export type Phase = "input" | "searching" | "results" | "processing" | "stopped" | "done";
+export type Phase = "input" | "searching" | "selecting" | "processing" | "stopped" | "done";
 
 interface StepStripProps {
   phase: Phase;
@@ -7,21 +7,25 @@ interface StepStripProps {
 export default function StepStrip({ phase }: StepStripProps) {
   const steps = [
     { id: "input", label: "Keywords" },
-    { id: "searching", label: "Search" },
-    { id: "results", label: "Download & Upload" },
+    { id: "searching", label: "Search & Pick" },
+    { id: "processing", label: "Download & Upload" },
   ];
-  const order: Phase[] = ["input", "searching", "results", "processing", "stopped", "done"];
+  const order: Phase[] = ["input", "searching", "selecting", "processing", "stopped", "done"];
   const cur = order.indexOf(phase);
 
   return (
     <div className="step-strip">
       {steps.map((s, i) => {
-        const si = order.indexOf(s.id === "results" ? "results" : (s.id as Phase));
-        const isDone = cur > si || (s.id === "results" && phase === "done");
+        const searchActive = phase === "searching" || phase === "selecting";
+        const isDone =
+          (s.id === "input" && cur > order.indexOf("input")) ||
+          (s.id === "searching" && (cur >= order.indexOf("processing") || phase === "done")) ||
+          (s.id === "processing" && phase === "done");
         const isActive =
-          cur === si ||
-          (s.id === "results" &&
-            (phase === "results" || phase === "processing" || phase === "done"));
+          (s.id === "input" && phase === "input") ||
+          (s.id === "searching" && searchActive) ||
+          (s.id === "processing" &&
+            (phase === "processing" || phase === "stopped" || phase === "done"));
         const cls = isDone ? "step done" : isActive ? "step active" : "step";
         return (
           <span key={s.id} style={{ display: "flex", alignItems: "center" }}>

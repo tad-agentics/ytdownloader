@@ -144,6 +144,37 @@ export async function listVideosByJob(jobId: string): Promise<PipelineVideo[]> {
   return (data || []) as PipelineVideo[];
 }
 
+export async function getVideo(jobId: string, videoId: string): Promise<PipelineVideo | null> {
+  const { data, error } = await db()
+    .from("pipeline_videos")
+    .select("*")
+    .eq("job_id", jobId)
+    .eq("video_id", videoId)
+    .single();
+  if (error) return null;
+  return data as PipelineVideo;
+}
+
+export async function deleteVideoRecord(jobId: string, videoId: string) {
+  const { error } = await db()
+    .from("pipeline_videos")
+    .delete()
+    .eq("job_id", jobId)
+    .eq("video_id", videoId);
+  if (error) throw new Error(`deleteVideoRecord: ${error.message}`);
+}
+
+export async function listStoredVideos(limit = 50): Promise<PipelineVideo[]> {
+  const { data, error } = await db()
+    .from("pipeline_videos")
+    .select("*")
+    .eq("status", "stored")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`listStoredVideos: ${error.message}`);
+  return (data || []) as PipelineVideo[];
+}
+
 export async function getDashboardSummary() {
   const { data, error } = await db().from("pipeline_summary").select("*").single();
   if (error) throw new Error(`getDashboardSummary: ${error.message}`);

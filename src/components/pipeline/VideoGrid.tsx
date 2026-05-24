@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import { friendlyDownloadError } from "@/lib/pipeline/duration-limits";
 
@@ -14,6 +16,8 @@ export interface VideoState {
   status: "queued" | "downloading" | "uploading" | "done" | "failed";
   progress: number;
   r2Key: string | null;
+  r2PublicUrl: string | null;
+  storedAt: string | null;
   transcriptStatus: "pending" | "stored" | "missing" | "failed";
   transcriptLang: string | null;
   transcriptUrl: string | null;
@@ -28,13 +32,54 @@ const fmtDur = (s: number) =>
     ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
     : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-function VideoCard({ v }: { v: VideoState }) {
+function selectionKey(v: VideoState) {
+  return `${v.keyword}::${v.videoId}`;
+}
+
+function VideoCard({
+  v,
+  deletable,
+  onDelete,
+  deleting,
+  selectable,
+  selected,
+  onToggle,
+}: {
+  v: VideoState;
+  deletable?: boolean;
+  onDelete?: (v: VideoState) => void;
+  deleting?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: (v: VideoState) => void;
+}) {
   const colors = ["#dbeafe", "#fce7f3", "#dcfce7", "#fef9c3", "#ede9fe", "#ffedd5"];
   const bg = colors[Math.abs(v.videoId.charCodeAt(0)) % colors.length];
   const uiStatus = v.status === "queued" ? "queued" : v.status;
+  const hasTranscriptLink = v.transcriptStatus === "stored" && Boolean(v.transcriptUrl);
+  const showMediaLinks = v.status === "done" && (v.r2PublicUrl || hasTranscriptLink);
+
+  const handleCardClick = () => {
+    if (selectable && onToggle) onToggle(v);
+  };
 
   return (
-    <div className={`vcard status-${uiStatus}`}>
+    <div
+      className={`vcard status-${uiStatus}${selectable ? " selectable" : ""}${selected ? " selected" : ""}`}
+      onClick={selectable ? handleCardClick : undefined}
+      onKeyDown={
+        selectable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onToggle?.(v);
+              }
+            }
+          : undefined
+      }
+      role={selectable ? "button" : undefined}
+      tabIndex={selectable ? 0 : undefined}
+    >
       <div className="vthumb">
         {v.thumbnailUrl ? (
           <Image
@@ -51,8 +96,13 @@ function VideoCard({ v }: { v: VideoState }) {
             style={{ background: `linear-gradient(135deg,${bg},${bg}cc)` }}
           />
         )}
+        {selectable && (
+          <span className={`vselect-mark${selected ? " on" : ""}`} aria-hidden="true">
+            {selected ? "✓" : ""}
+          </span>
+        )}
         <span className="vdur">{fmtDur(v.durationSeconds)}</span>
-        {v.status !== "queued" && (
+        {!selectable && v.status !== "queued" && (
           <span className={`vstatus-badge ${v.status}`}>
             {v.status === "downloading"
               ? "↓ DL"
@@ -64,36 +114,67 @@ function VideoCard({ v }: { v: VideoState }) {
           </span>
         )}
       </div>
-      <div className="vprog-bar">
-        <div className={`vprog-fill ${v.status}`} style={{ width: `${v.progress}%` }} />
-      </div>
+      {!selectable && (
+        <div className="vprog-bar">
+          <div className={`vprog-fill ${v.status}`} style={{ width: `${v.progress}%` }} />
+        </div>
+      )}
       <div className="vinfo">
         <div className="vtitle">{v.title}</div>
         <div className="vmeta">
           <span>{fmtNum(v.views)}</span>
           <span>{v.estimatedMb > 0 ? `${v.estimatedMb} MB` : "—"}</span>
         </div>
+        {selectable && v.keyword && (
+          <div className="vkeyword-tag">{v.keyword}</div>
+        )}
         {v.status === "failed" && v.error && (
           <div className="verror" title={v.error}>
             {friendlyDownloadError(v.error)}
           </div>
         )}
-        {v.status === "done" && (
-          <div className="vtranscript">
-            {v.transcriptStatus === "stored" ? (
-              v.transcriptUrl ? (
-                <a href={v.transcriptUrl} target="_blank" rel="noreferrer" className="vtranscript-link">
-                  CC · {v.transcriptLang || "srt"}
-                </a>
-              ) : (
-                <span className="vtranscript-ok">CC · {v.transcriptLang || "srt"}</span>
-              )
+        {showMediaLinks && (
+          <div className="vmedia-links">
+            {v.r2PublicUrl ? (
+              <a
+                href={v.r2PublicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="vmedia-btn video"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Video ↗
+              </a>
+            ) : null}
+            {hasTranscriptLink ? (
+              <a
+                href={v.transcriptUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="vmedia-btn transcript"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Transcript{v.transcriptLang ? ` · ${v.transcriptLang}` : ""} ↗
+              </a>
             ) : v.transcriptStatus === "missing" ? (
-              <span className="vtranscript-missing">No transcript</span>
+              <span className="vmedia-muted">No transcript</span>
             ) : v.transcriptStatus === "failed" ? (
-              <span className="vtranscript-failed">Transcript failed</span>
+              <span className="vmedia-muted">Transcript failed</span>
             ) : null}
           </div>
+        )}
+        {deletable && v.status === "done" && onDelete && (
+          <button
+            type="button"
+            className="vdel-action"
+            disabled={deleting}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(v);
+            }}
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
         )}
       </div>
     </div>
@@ -102,14 +183,39 @@ function VideoCard({ v }: { v: VideoState }) {
 
 interface VideoGridProps {
   videos: VideoState[];
+  deletable?: boolean;
+  onDelete?: (video: VideoState) => void;
+  deletingKey?: string | null;
+  selectable?: boolean;
+  selectedKeys?: Set<string>;
+  onToggle?: (video: VideoState) => void;
 }
 
-export default function VideoGrid({ videos }: VideoGridProps) {
+export default function VideoGrid({
+  videos,
+  deletable,
+  onDelete,
+  deletingKey,
+  selectable,
+  selectedKeys,
+  onToggle,
+}: VideoGridProps) {
   return (
     <div className="vgrid">
       {videos.map((v) => (
-        <VideoCard key={`${v.jobId}-${v.videoId}`} v={v} />
+        <VideoCard
+          key={`${v.jobId || v.keyword}-${v.videoId}`}
+          v={v}
+          deletable={deletable}
+          onDelete={onDelete}
+          deleting={deletingKey === `${v.jobId}-${v.videoId}`}
+          selectable={selectable}
+          selected={selectedKeys?.has(selectionKey(v))}
+          onToggle={onToggle}
+        />
       ))}
     </div>
   );
 }
+
+export { selectionKey };

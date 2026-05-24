@@ -1,4 +1,4 @@
-import { S3Client, HeadBucketCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, HeadBucketCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import fs from "fs";
 
@@ -144,6 +144,23 @@ export async function getR2StorageStats(): Promise<{ totalBytes: number; objectC
   } while (continuationToken);
 
   return { totalBytes, objectCount };
+}
+
+export async function deleteR2Objects(keys: string[]): Promise<string[]> {
+  const unique = Array.from(new Set(keys.filter(Boolean)));
+  if (!unique.length) return [];
+
+  await client().send(
+    new DeleteObjectsCommand({
+      Bucket: BUCKET(),
+      Delete: {
+        Objects: unique.map((Key) => ({ Key })),
+        Quiet: true,
+      },
+    })
+  );
+
+  return unique;
 }
 
 export async function pingR2() {

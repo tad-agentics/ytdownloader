@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import StepStrip, { type Phase } from "@/components/pipeline/StepStrip";
 import KeywordInput from "@/components/pipeline/KeywordInput";
-import VideoGrid, { type VideoState } from "@/components/pipeline/VideoGrid";
+import VideoGrid, { type VideoState, selectionKey } from "@/components/pipeline/VideoGrid";
+import DeleteConfirmModal from "@/components/pipeline/DeleteConfirmModal";
 import ProgressSummary from "@/components/pipeline/ProgressSummary";
 import StorageOverview from "@/components/storage/StorageOverview";
 import StatCards from "@/components/storage/StatCards";
 import AllocationBars from "@/components/storage/AllocationBars";
 import type { PipelineJob, PipelineVideo } from "@/lib/pipeline/types";
+import type { YouTubeVideo } from "@/lib/pipeline/youtube-search";
 import { YOUTUBE_REGION_OPTIONS } from "@/lib/pipeline/youtube-search";
 import {
   DEFAULT_MAX_DURATION_SECONDS,
@@ -16,6 +18,29 @@ import {
 } from "@/lib/pipeline/duration-limits";
 
 const TERMINAL_JOB_STATUSES = ["done", "failed", "stopped"];
+
+function mapSearchVideo(keyword: string, v: YouTubeVideo): VideoState {
+  return {
+    videoId: v.videoId,
+    jobId: "",
+    keyword,
+    title: v.title,
+    channelName: v.channelName,
+    views: v.viewCount,
+    thumbnailUrl: v.thumbnailUrl || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+    durationSeconds: v.durationSeconds,
+    estimatedMb: Math.max(1, Math.round(v.durationSeconds / 10)),
+    status: "queued",
+    progress: 0,
+    r2Key: null,
+    r2PublicUrl: null,
+    storedAt: null,
+    transcriptStatus: "pending",
+    transcriptLang: null,
+    transcriptUrl: null,
+    error: null,
+  };
+}
 
 function mapDbVideo(v: PipelineVideo): VideoState {
   const statusMap: Record<string, VideoState["status"]> = {
@@ -43,6 +68,8 @@ function mapDbVideo(v: PipelineVideo): VideoState {
     status,
     progress: status === "done" ? 100 : 0,
     r2Key: v.r2_key,
+    r2PublicUrl: v.r2_public_url,
+    storedAt: v.created_at,
     transcriptStatus: v.transcript_status || "pending",
     transcriptLang: v.transcript_lang,
     transcriptUrl: v.transcript_public_url,
@@ -95,8 +122,21 @@ export default function Page() {
   );
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [videoSummary, setVideoSummary] = useState<
-    Array<{ keyword: string; stored_count: number; failed_count: number; queued_count: number }>
+    Array<{
+      keyword: string;
+      stored_count: number;
+      failed_count: number;
+      queued_count: number;
+      transcript_count?: number;
+    }>
   >([]);
+  const [historyVideos, setHistoryVideos] = useState<VideoState[]>([]);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
+  const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
+    []
+  );
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [currentJobIds, setCurrentJobIds] = useState<string[]>([]);
   const [isPolling, setIsPolling] = useState(false);
   const [health, setHealth] = useState<{
@@ -109,7 +149,6 @@ export default function Page() {
   const runRef = useRef(false);
   const stopRef = useRef(false);
   const jobIdsRef = useRef<string[]>([]);
-  const resultsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseRef = useRef<Phase>("input");
 
   useEffect(() => {
@@ -135,18 +174,15 @@ export default function Page() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (resultsTimerRef.current) clearTimeout(resultsTimerRef.current);
-    };
-  }, []);
-
   const refreshStorage = useCallback(async () => {
     const res = await fetch("/api/pipeline/jobs?summary=1&r2=1");
     const data = await res.json();
     if (data.summary) setSummary(data.summary);
     if (data.videoSummary) setVideoSummary(data.videoSummary);
     if (data.r2Storage) setR2Storage(data.r2Storage);
+    if (Array.isArray(data.history)) {
+      setHistoryVideos(data.history.map((v: PipelineVideo) => mapDbVideo(v)));
+    }
     if (data.r2) setHealth((h) => ({ ...h, r2: data.r2.ok ? "ok" : data.r2.configured === false ? "unconfigured" : "error" }));
     setStorageLoaded(true);
   }, []);
@@ -154,15 +190,6 @@ export default function Page() {
   useEffect(() => {
     refreshStorage();
   }, [refreshStorage]);
-
-  const scheduleResultsPhase = useCallback(() => {
-    if (resultsTimerRef.current) return;
-    setPhase("results");
-    resultsTimerRef.current = setTimeout(() => {
-      resultsTimerRef.current = null;
-      if (!stopRef.current) setPhase("processing");
-    }, 400);
-  }, []);
 
   const pollJobs = useCallback(async (): Promise<boolean> => {
     const ids = jobIdsRef.current;
@@ -176,18 +203,7 @@ export default function Page() {
     const incoming = results.flatMap((r) => (r.videos || []).map(mapDbVideo));
 
     setVideos((prev) => mergeVideos(prev, incoming));
-
-    const currentPhase = phaseRef.current;
-    if (
-      incoming.length > 0 &&
-      currentPhase === "searching" &&
-      !stopRef.current &&
-      !resultsTimerRef.current
-    ) {
-      scheduleResultsPhase();
-    } else if (!resultsTimerRef.current || currentPhase !== "results") {
-      setPhase(derivePhase(jobs, incoming.length, stopRef.current));
-    }
+    setPhase(derivePhase(jobs, incoming.length, stopRef.current));
 
     const allTerminal = jobs.length > 0 && jobs.every((j) => TERMINAL_JOB_STATUSES.includes(j.status));
     if (allTerminal) {
@@ -198,7 +214,7 @@ export default function Page() {
     }
 
     return true;
-  }, [refreshStorage, scheduleResultsPhase]);
+  }, [refreshStorage]);
 
   useEffect(() => {
     if (!isPolling) return;
@@ -261,31 +277,115 @@ export default function Page() {
     setCurrentJobIds([]);
     setIsPolling(false);
     setVideos([]);
+    setSearchResults([]);
+    setSelectedKeys(new Set());
     setPhase("input");
-    if (resultsTimerRef.current) {
-      clearTimeout(resultsTimerRef.current);
-      resultsTimerRef.current = null;
+    void refreshStorage();
+  };
+
+  const confirmDeleteVideo = async () => {
+    if (!deleteTarget) return;
+    const v = deleteTarget;
+    const key = `${v.jobId}-${v.videoId}`;
+    setDeletingKey(key);
+    try {
+      const res = await fetch(`/api/pipeline/videos/${v.jobId}/${v.videoId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(typeof data.error === "string" ? data.error : "Delete failed");
+        return;
+      }
+
+      setHistoryVideos((prev) =>
+        prev.filter((h) => !(h.jobId === v.jobId && h.videoId === v.videoId))
+      );
+      setVideos((prev) =>
+        prev.filter((h) => !(h.jobId === v.jobId && h.videoId === v.videoId))
+      );
+      setDeleteTarget(null);
+      await refreshStorage();
+    } finally {
+      setDeletingKey(null);
     }
   };
 
-  const handleRun = async () => {
+  const handleDeleteVideo = (v: VideoState) => {
+    setDeleteTarget(v);
+  };
+
+  const toggleVideoSelection = (v: VideoState) => {
+    const key = selectionKey(v);
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleSearch = async () => {
     if (runRef.current || keywords.length === 0) return;
     runRef.current = true;
     stopRef.current = false;
     setVideos([]);
-    jobIdsRef.current = [];
-    setCurrentJobIds([]);
+    setSearchResults([]);
+    setSelectedKeys(new Set());
     setPhase("searching");
 
-    const res = await fetch("/api/pipeline/scrape", {
+    try {
+      const res = await fetch("/api/pipeline/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords, maxResults, regionCode, maxDurationSeconds }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPhase("input");
+        return;
+      }
+
+      const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
+      setSearchResults(results);
+      const mapped = results.flatMap((row) => row.videos.map((v) => mapSearchVideo(row.keyword, v)));
+      setVideos(mapped);
+      setSelectedKeys(new Set(mapped.map((v) => selectionKey(v))));
+      setPhase(mapped.length ? "selecting" : "input");
+    } finally {
+      runRef.current = false;
+    }
+  };
+
+  const handleDownloadSelected = async () => {
+    if (runRef.current || selectedKeys.size === 0) return;
+    runRef.current = true;
+    stopRef.current = false;
+
+    const selections = searchResults
+      .map((row) => ({
+        keyword: row.keyword,
+        videos: row.videos.filter((v) => selectedKeys.has(`${row.keyword}::${v.videoId}`)),
+      }))
+      .filter((row) => row.videos.length > 0);
+
+    if (!selections.length) {
+      runRef.current = false;
+      return;
+    }
+
+    setPhase("processing");
+    setVideos([]);
+    jobIdsRef.current = [];
+    setCurrentJobIds([]);
+
+    const res = await fetch("/api/pipeline/download", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keywords, maxResults, quality, regionCode, maxDurationSeconds }),
+      body: JSON.stringify({ selections, quality, regionCode }),
     });
     const data = await res.json();
     if (!res.ok) {
       runRef.current = false;
-      setPhase("input");
+      setPhase("selecting");
       return;
     }
 
@@ -295,7 +395,19 @@ export default function Page() {
     setIsPolling(true);
   };
 
-  const isRunning = ["searching", "processing", "results"].includes(phase);
+  const isRunning = phase === "searching" || phase === "processing";
+  const showSelection = phase === "selecting" && videos.length > 0;
+  const showActiveRun = videos.length > 0 && ["processing", "done", "stopped"].includes(phase);
+  const historyToShow = historyVideos.filter(
+    (h) => !showActiveRun || !videos.some((v) => v.videoId === h.videoId && v.jobId === h.jobId)
+  );
+  const showHistory = historyToShow.length > 0 && !isRunning && phase !== "selecting";
+  const summaryDownloaded = Number(summary?.total_videos ?? 0);
+  const summaryFailed = videoSummary.reduce((sum, row) => sum + (row.failed_count ?? 0), 0);
+  const summarySuccessPct =
+    summaryDownloaded + summaryFailed > 0
+      ? Math.round((summaryDownloaded / (summaryDownloaded + summaryFailed)) * 100)
+      : null;
   const done = videos.filter((v) => v.status === "done").length;
   const failed = videos.filter((v) => v.status === "failed").length;
   const transcripts = videos.filter((v) => v.transcriptStatus === "stored").length;
@@ -314,8 +426,7 @@ export default function Page() {
   const dotClass = (state?: "ok" | "unconfigured" | "error") =>
     state === "ok" ? "on" : state === "unconfigured" ? "muted" : "warn";
 
-  const showProgress =
-    phase === "processing" || phase === "results" || phase === "done" || phase === "stopped";
+  const showProgress = phase === "processing" || phase === "done" || phase === "stopped";
 
   return (
     <main className="root">
@@ -371,11 +482,13 @@ export default function Page() {
               onRegionCodeChange={setRegionCode}
               regionOptions={YOUTUBE_REGION_OPTIONS}
               isRunning={isRunning}
-              onRun={handleRun}
+              onSearch={handleSearch}
+              onDownloadSelected={handleDownloadSelected}
               onReset={handleReset}
               onStop={handleStop}
               phase={phase}
               activeCount={active}
+              selectedCount={selectedKeys.size}
             />
 
             {phase === "searching" && (
@@ -390,11 +503,40 @@ export default function Page() {
               </div>
             )}
 
-            {videos.length > 0 && (
+            {showSelection && (
+              <>
+                <div className="vgrid-hdr">
+                  <span className="vgrid-title">Pick videos to download</span>
+                  <span className="vgrid-meta">
+                    {selectedKeys.size} of {total} selected
+                  </span>
+                </div>
+                <div className="select-toolbar">
+                  <button
+                    type="button"
+                    className="select-btn"
+                    onClick={() => setSelectedKeys(new Set(videos.map((v) => selectionKey(v))))}
+                  >
+                    Select all
+                  </button>
+                  <button type="button" className="select-btn" onClick={() => setSelectedKeys(new Set())}>
+                    Clear selection
+                  </button>
+                </div>
+                <VideoGrid
+                  videos={videos}
+                  selectable
+                  selectedKeys={selectedKeys}
+                  onToggle={toggleVideoSelection}
+                />
+              </>
+            )}
+
+            {showActiveRun && (
               <>
                 <div className="vgrid-hdr">
                   <span className="vgrid-title">
-                    {total} video{total > 1 ? "s" : ""} found
+                    {total} video{total > 1 ? "s" : ""} in pipeline
                   </span>
                   <span className="vgrid-meta">
                     {done} stored
@@ -406,7 +548,7 @@ export default function Page() {
                 <VideoGrid videos={videos} />
                 {showProgress && (
                   <ProgressSummary
-                    phase={phase === "results" ? "processing" : phase}
+                    phase={phase}
                     done={done}
                     total={total}
                     storedMb={storedMb}
@@ -416,13 +558,30 @@ export default function Page() {
               </>
             )}
 
-            {phase === "input" && keywords.length === 0 && (
+            {showHistory && (
+              <div className="history-section">
+                <div className="vgrid-hdr">
+                  <span className="vgrid-title">Download history</span>
+                  <span className="vgrid-meta">
+                    {historyToShow.length} stored in R2
+                  </span>
+                </div>
+                <VideoGrid
+                  videos={historyToShow}
+                  deletable
+                  onDelete={handleDeleteVideo}
+                  deletingKey={deletingKey}
+                />
+              </div>
+            )}
+
+            {phase === "input" && keywords.length === 0 && !showHistory && (
               <div className="empty-hint">
-                Add keywords above, then click <strong>Run Pipeline</strong>.
+                Add keywords above, then click <strong>Search YouTube</strong>.
                 <br />
-                YTDownloader will search YouTube, download each video,
+                Review the results, pick the videos you want,
                 <br />
-                fetch transcripts when available, and upload to R2.
+                then download with transcripts to R2.
               </div>
             )}
           </div>
@@ -435,19 +594,50 @@ export default function Page() {
               summary={summary}
               r2Storage={r2Storage}
               storageLoaded={storageLoaded}
-              localStoredMb={storedMb}
-              localFileCount={done}
+              localStoredMb={
+                isRunning ? storedMb : r2Storage ? r2Storage.totalBytes / (1024 * 1024) : 0
+              }
+              localFileCount={isRunning ? done : (r2Storage?.objectCount ?? summaryDownloaded)}
               r2Ok={health.r2 === "ok"}
             />
             <StatCards
-              downloaded={done}
-              failed={failed}
-              successPct={total > 0 ? Math.round((done / total) * 100) : null}
+              downloaded={isRunning ? done : summaryDownloaded}
+              failed={isRunning ? failed : summaryFailed}
+              successPct={
+                isRunning
+                  ? total > 0
+                    ? Math.round((done / total) * 100)
+                    : null
+                  : summarySuccessPct
+              }
             />
-            <AllocationBars keywords={keywords} videos={videos} videoSummary={videoSummary} />
+            <AllocationBars
+              keywords={
+                keywords.length > 0
+                  ? keywords
+                  : Array.from(new Set(historyVideos.map((v) => v.keyword)))
+              }
+              videos={isRunning ? videos : historyVideos}
+              videoSummary={videoSummary}
+            />
           </div>
         </div>
       </div>
+
+      <DeleteConfirmModal
+        open={Boolean(deleteTarget)}
+        title="Delete from R2?"
+        message={
+          deleteTarget
+            ? `"${deleteTarget.title || deleteTarget.videoId}" will be permanently removed from R2, including the MP4 and transcript. This cannot be undone.`
+            : ""
+        }
+        loading={Boolean(deletingKey)}
+        onConfirm={confirmDeleteVideo}
+        onCancel={() => {
+          if (!deletingKey) setDeleteTarget(null);
+        }}
+      />
     </main>
   );
 }

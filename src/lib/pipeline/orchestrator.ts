@@ -1,4 +1,4 @@
-import { searchYouTubeVideos } from "./youtube-search";
+import { searchYouTubeVideos, type YouTubeVideo } from "./youtube-search";
 import {
   downloadYouTubeVideo,
   cleanupTempFile,
@@ -44,6 +44,32 @@ export async function runPipelineJob(
   try {
     await updateJob(jobId, { status: "searching" });
     const videos = await searchYouTubeVideos(keyword, { maxResults, regionCode, maxDurationSeconds });
+    await updateJob(jobId, { status: "downloading", videos_found: videos.length });
+    await runDownloadJob(jobId, keyword, videos, { quality, regionCode, skipJobCreate: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await updateJob(jobId, { status: "failed", error: message.slice(0, 1000) });
+    throw err;
+  }
+}
+
+export async function runDownloadJob(
+  jobId: string,
+  keyword: string,
+  videos: YouTubeVideo[],
+  opts: {
+    quality?: VideoQuality;
+    regionCode?: string;
+    skipJobCreate?: boolean;
+  } = {}
+): Promise<void> {
+  const { quality = "720p", regionCode = "US", skipJobCreate = false } = opts;
+
+  if (!skipJobCreate) {
+    await createJob(jobId, keyword, videos.length, quality, regionCode);
+  }
+
+  try {
     await updateJob(jobId, { status: "downloading", videos_found: videos.length });
 
     if (!videos.length) {

@@ -17,11 +17,13 @@ interface KeywordInputProps {
   onRegionCodeChange: (code: string) => void;
   regionOptions: ReadonlyArray<{ code: string; label: string }>;
   isRunning: boolean;
-  onRun: () => void;
+  onSearch: () => void;
+  onDownloadSelected: () => void;
   onReset: () => void;
   onStop: () => void;
   phase: Phase;
   activeCount: number;
+  selectedCount: number;
 }
 
 export default function KeywordInput({
@@ -38,11 +40,13 @@ export default function KeywordInput({
   onRegionCodeChange,
   regionOptions,
   isRunning,
-  onRun,
+  onSearch,
+  onDownloadSelected,
   onReset,
   onStop,
   phase,
   activeCount,
+  selectedCount,
 }: KeywordInputProps) {
   const [kwInput, setKwInput] = useState("");
 
@@ -55,22 +59,33 @@ export default function KeywordInput({
 
   const removeKw = (k: string) => onKeywordsChange(keywords.filter((x) => x !== k));
 
-  const runLabel =
+  const primaryLabel =
     phase === "searching"
       ? "Searching…"
-      : phase === "processing" || phase === "results"
-        ? `Processing ${activeCount > 0 ? `(${activeCount} active)` : "…"}`
-        : phase === "done" || phase === "stopped"
-          ? "Run again"
-          : "Run Pipeline";
+      : phase === "selecting"
+        ? `Download ${selectedCount} selected`
+        : phase === "processing"
+          ? `Processing ${activeCount > 0 ? `(${activeCount} active)` : "…"}`
+          : phase === "done" || phase === "stopped"
+            ? "Search again"
+            : "Search YouTube";
 
-  const handleRunClick = () => {
+  const handlePrimaryClick = () => {
     if (phase === "done" || phase === "stopped") {
       onReset();
       return;
     }
-    onRun();
+    if (phase === "selecting") {
+      onDownloadSelected();
+      return;
+    }
+    onSearch();
   };
+
+  const primaryDisabled =
+    isRunning ||
+    (phase === "selecting" && selectedCount === 0) ||
+    (phase !== "selecting" && phase !== "done" && phase !== "stopped" && keywords.length === 0);
 
   return (
     <>
@@ -87,9 +102,9 @@ export default function KeywordInput({
                 onKeywordsChange(keywords.slice(0, -1));
               }
             }}
-            disabled={isRunning}
+            disabled={isRunning || phase === "selecting"}
           />
-          <button className="btn add" onClick={addKw} disabled={isRunning || !kwInput.trim()}>
+          <button className="btn add" onClick={addKw} disabled={isRunning || phase === "selecting" || !kwInput.trim()}>
             Add
           </button>
         </div>
@@ -102,7 +117,7 @@ export default function KeywordInput({
             keywords.map((k) => (
               <div key={k} className="tag">
                 {k}
-                <button className="tag-x" onClick={() => removeKw(k)} disabled={isRunning}>
+                <button className="tag-x" onClick={() => removeKw(k)} disabled={isRunning || phase === "selecting"}>
                   ×
                 </button>
               </div>
@@ -117,7 +132,7 @@ export default function KeywordInput({
             className="sel"
             value={String(maxResults)}
             onChange={(e) => onMaxResultsChange(parseInt(e.target.value, 10))}
-            disabled={isRunning}
+            disabled={isRunning || phase === "selecting"}
           >
             {["2", "5", "8", "10", "20", "50"].map((v) => (
               <option key={v} value={v}>
@@ -129,7 +144,7 @@ export default function KeywordInput({
             className="sel"
             value={String(maxDurationSeconds)}
             onChange={(e) => onMaxDurationSecondsChange(parseInt(e.target.value, 10))}
-            disabled={isRunning}
+            disabled={isRunning || phase === "selecting"}
           >
             {maxDurationOptions.map(({ seconds, label }) => (
               <option key={seconds} value={seconds}>
@@ -141,7 +156,7 @@ export default function KeywordInput({
             className="sel"
             value={regionCode}
             onChange={(e) => onRegionCodeChange(e.target.value)}
-            disabled={isRunning}
+            disabled={isRunning || phase === "selecting"}
           >
             {regionOptions.map(({ code, label }) => (
               <option key={code} value={code}>
@@ -153,7 +168,7 @@ export default function KeywordInput({
             className="sel"
             value={quality}
             onChange={(e) => onQualityChange(e.target.value)}
-            disabled={isRunning}
+            disabled={isRunning || phase === "selecting"}
           >
             {["360p", "480p", "720p", "1080p"].map((v) => (
               <option key={v} value={v}>
@@ -165,12 +180,17 @@ export default function KeywordInput({
         <div className="cfg-actions">
           <button
             className={`run-btn${isRunning ? " running" : ""}`}
-            onClick={handleRunClick}
-            disabled={isRunning || (phase !== "done" && phase !== "stopped" && keywords.length === 0)}
+            onClick={handlePrimaryClick}
+            disabled={primaryDisabled}
           >
-            {runLabel}
+            {primaryLabel}
           </button>
-          {isRunning && (
+          {phase === "selecting" && (
+            <button className="stop-btn secondary" onClick={onReset}>
+              Cancel
+            </button>
+          )}
+          {phase === "processing" && (
             <button className="stop-btn" onClick={onStop}>
               ■ Stop
             </button>
