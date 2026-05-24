@@ -123,6 +123,29 @@ export async function uploadTranscriptToR2(
   };
 }
 
+export async function getR2StorageStats(): Promise<{ totalBytes: number; objectCount: number }> {
+  let totalBytes = 0;
+  let objectCount = 0;
+  let continuationToken: string | undefined;
+
+  do {
+    const r = await client().send(
+      new ListObjectsV2Command({
+        Bucket: BUCKET(),
+        MaxKeys: 1000,
+        ContinuationToken: continuationToken,
+      })
+    );
+    for (const o of r.Contents || []) {
+      totalBytes += o.Size || 0;
+      objectCount += 1;
+    }
+    continuationToken = r.IsTruncated ? r.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return { totalBytes, objectCount };
+}
+
 export async function pingR2() {
   const env = r2EnvStatus();
   if (!env.ok) return { ok: false as const, error: env.error, configured: false as const };

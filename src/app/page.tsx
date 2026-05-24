@@ -90,6 +90,10 @@ export default function Page() {
   const [regionCode, setRegionCode] = useState("US");
   const [videos, setVideos] = useState<VideoState[]>([]);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
+  const [r2Storage, setR2Storage] = useState<{ totalBytes: number; objectCount: number } | null>(
+    null
+  );
+  const [storageLoaded, setStorageLoaded] = useState(false);
   const [videoSummary, setVideoSummary] = useState<
     Array<{ keyword: string; stored_count: number; failed_count: number; queued_count: number }>
   >([]);
@@ -142,8 +146,14 @@ export default function Page() {
     const data = await res.json();
     if (data.summary) setSummary(data.summary);
     if (data.videoSummary) setVideoSummary(data.videoSummary);
+    if (data.r2Storage) setR2Storage(data.r2Storage);
     if (data.r2) setHealth((h) => ({ ...h, r2: data.r2.ok ? "ok" : data.r2.configured === false ? "unconfigured" : "error" }));
+    setStorageLoaded(true);
   }, []);
+
+  useEffect(() => {
+    refreshStorage();
+  }, [refreshStorage]);
 
   const scheduleResultsPhase = useCallback(() => {
     if (resultsTimerRef.current) return;
@@ -423,6 +433,8 @@ export default function Page() {
             <div className="r-title">Storage</div>
             <StorageOverview
               summary={summary}
+              r2Storage={r2Storage}
+              storageLoaded={storageLoaded}
               localStoredMb={storedMb}
               localFileCount={done}
               r2Ok={health.r2 === "ok"}
