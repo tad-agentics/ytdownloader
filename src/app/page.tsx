@@ -5,6 +5,7 @@ import StepStrip, { type Phase } from "@/components/pipeline/StepStrip";
 import KeywordInput from "@/components/pipeline/KeywordInput";
 import VideoGrid, { type VideoState, selectionKey } from "@/components/pipeline/VideoGrid";
 import DeleteConfirmModal from "@/components/pipeline/DeleteConfirmModal";
+import OnboardingModal, { ONBOARDING_STORAGE_KEY } from "@/components/pipeline/OnboardingModal";
 import ProgressSummary from "@/components/pipeline/ProgressSummary";
 import StorageOverview from "@/components/storage/StorageOverview";
 import StatCards from "@/components/storage/StatCards";
@@ -133,6 +134,7 @@ export default function Page() {
   const [historyVideos, setHistoryVideos] = useState<VideoState[]>([]);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
     []
   );
@@ -190,6 +192,25 @@ export default function Page() {
   useEffect(() => {
     refreshStorage();
   }, [refreshStorage]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ONBOARDING_STORAGE_KEY) !== "done") {
+        setShowOnboarding(true);
+      }
+    } catch {
+      setShowOnboarding(true);
+    }
+  }, []);
+
+  const completeOnboarding = () => {
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, "done");
+    } catch {
+      /* private browsing */
+    }
+    setShowOnboarding(false);
+  };
 
   const pollJobs = useCallback(async (): Promise<boolean> => {
     const ids = jobIdsRef.current;
@@ -638,6 +659,8 @@ export default function Page() {
           if (!deletingKey) setDeleteTarget(null);
         }}
       />
+
+      <OnboardingModal open={showOnboarding} onComplete={completeOnboarding} />
     </main>
   );
 }

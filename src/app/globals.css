@@ -634,6 +634,107 @@ body {
   cursor: wait;
 }
 
+.modal-btn.primary {
+  background: var(--teal);
+  color: var(--teal-dk);
+}
+
+.modal-btn.primary:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.onboarding-overlay {
+  backdrop-filter: blur(2px);
+}
+
+.onboarding-dialog {
+  width: min(480px, 100%);
+}
+
+.onboarding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.onboarding-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--teal-dk);
+}
+
+.onboarding-steps {
+  display: flex;
+  gap: 6px;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.onboarding-dot.active {
+  background: var(--teal);
+  transform: scale(1.15);
+}
+
+.onboarding-dot.done {
+  background: #99f6e4;
+}
+
+.onboarding-step-num {
+  font-size: 11px;
+  color: var(--tx3);
+  font-family: var(--m);
+  margin-bottom: 4px;
+}
+
+.onboarding-title {
+  margin-bottom: 6px;
+}
+
+.onboarding-lead {
+  font-size: 13px;
+  color: var(--tx2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.onboarding-list {
+  margin: 0 0 20px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboarding-list li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+
+.onboarding-actions {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.onboarding-skip {
+  margin-right: auto;
+}
+
+.onboarding-nav {
+  display: flex;
+  gap: 8px;
+}
+
 .vgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
