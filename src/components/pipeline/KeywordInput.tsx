@@ -13,6 +13,8 @@ interface KeywordInputProps {
   maxDurationOptions: ReadonlyArray<{ seconds: number; label: string }>;
   quality: string;
   onQualityChange: (q: string) => void;
+  downloadConcurrency: number;
+  onDownloadConcurrencyChange: (n: number) => void;
   regionCode: string;
   onRegionCodeChange: (code: string) => void;
   regionOptions: ReadonlyArray<{ code: string; label: string }>;
@@ -36,6 +38,8 @@ export default function KeywordInput({
   maxDurationOptions,
   quality,
   onQualityChange,
+  downloadConcurrency,
+  onDownloadConcurrencyChange,
   regionCode,
   onRegionCodeChange,
   regionOptions,
@@ -173,6 +177,18 @@ export default function KeywordInput({
             {["360p", "480p", "720p", "1080p"].map((v) => (
               <option key={v} value={v}>
                 {v}
+              </option>
+            ))}
+          </select>
+          <select
+            className="sel"
+            value={String(downloadConcurrency)}
+            onChange={(e) => onDownloadConcurrencyChange(parseInt(e.target.value, 10))}
+            disabled={isRunning || phase === "selecting"}
+          >
+            {[1, 2, 3].map((v) => (
+              <option key={v} value={v}>
+                {v} parallel download{v > 1 ? "s" : ""}
               </option>
             ))}
           </select>

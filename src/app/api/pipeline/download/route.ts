@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     selections,
     quality = "720p",
     regionCode = "US",
+    concurrency,
   } = await req.json();
 
   if (!Array.isArray(selections) || !selections.length) {
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
     runDownloadJob(jobId, keyword, videos, {
       quality: quality as VideoQuality,
       regionCode,
+      concurrency,
     }).catch((err) => console.error(`Job ${jobId} failed:`, err));
   }
 

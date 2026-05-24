@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchYouTubeVideos } from "@/lib/pipeline/youtube-search";
+import { enrichVideosWithTranscriptAvailability } from "@/lib/pipeline/transcript-probe";
 
 const MAX_VIDEOS_PER_KEYWORD = 30;
 
@@ -23,17 +24,22 @@ export async function POST(req: NextRequest) {
   }
 
   const results = await Promise.all(
-    trimmed.map(async (keyword) => ({
-      keyword,
-      videos: await searchYouTubeVideos(keyword, {
+    trimmed.map(async (keyword) => {
+      const videos = await searchYouTubeVideos(keyword, {
         maxResults: cappedMax,
         regionCode,
         maxDurationSeconds: parseInt(String(maxDurationSeconds), 10) || 0,
-      }),
-    }))
+      });
+      const enriched = await enrichVideosWithTranscriptAvailability(videos);
+      return { keyword, videos: enriched };
+    })
   );
 
   const totalFound = results.reduce((sum, row) => sum + row.videos.length, 0);
+  const withTranscripts = results.reduce(
+    (sum, row) => sum + row.videos.filter((v) => v.transcriptAvailable).length,
+    0
+  );
 
-  return NextResponse.json({ success: true, results, totalFound });
+  return NextResponse.json({ success: true, results, totalFound, withTranscripts });
 }

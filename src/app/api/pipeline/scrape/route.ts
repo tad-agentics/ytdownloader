@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     quality = "720p",
     regionCode = "US",
     maxDurationSeconds = 1200,
+    concurrency,
   } = await req.json();
   if (!Array.isArray(keywords) || !keywords.length) {
     return NextResponse.json({ error: "keywords[] required" }, { status: 400 });
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       quality: quality as VideoQuality,
       regionCode,
       maxDurationSeconds: parseInt(String(maxDurationSeconds), 10) || 0,
+      concurrency,
     }).catch((err) => console.error(`Job ${jobId} failed:`, err));
   }
 

@@ -21,6 +21,7 @@ export interface VideoState {
   transcriptStatus: "pending" | "stored" | "missing" | "failed";
   transcriptLang: string | null;
   transcriptUrl: string | null;
+  transcriptAvailable: boolean | null;
   error: string | null;
 }
 
@@ -99,6 +100,18 @@ function VideoCard({
         {selectable && (
           <span className={`vselect-mark${selected ? " on" : ""}`} aria-hidden="true">
             {selected ? "✓" : ""}
+          </span>
+        )}
+        {selectable && v.transcriptAvailable !== null && (
+          <span
+            className={`vtranscript-badge${v.transcriptAvailable ? " yes" : " no"}`}
+            title={
+              v.transcriptAvailable
+                ? `Transcript available${v.transcriptLang ? ` (${v.transcriptLang})` : ""}`
+                : "No transcript available"
+            }
+          >
+            CC {v.transcriptAvailable ? "✓" : "✗"}
           </span>
         )}
         <span className="vdur">{fmtDur(v.durationSeconds)}</span>

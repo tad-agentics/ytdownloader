@@ -6,6 +6,7 @@ import {
   type VideoQuality,
 } from "./downloader";
 import { uploadToR2, uploadTranscriptToR2 } from "./r2";
+import { resolveDownloadConcurrency } from "./download-concurrency";
 import {
   createJob,
   updateJob,
@@ -23,6 +24,29 @@ async function shouldStop(jobId: string): Promise<boolean> {
   return job?.status === "stopping";
 }
 
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+  shouldAbort: () => Promise<boolean>
+): Promise<void> {
+  if (!items.length) return;
+
+  let index = 0;
+
+  async function runWorker() {
+    while (true) {
+      if (await shouldAbort()) return;
+      const i = index++;
+      if (i >= items.length) return;
+      await worker(items[i]);
+    }
+  }
+
+  const workers = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workers }, () => runWorker()));
+}
+
 export async function runPipelineJob(
   jobId: string,
   keyword: string,
@@ -31,6 +55,7 @@ export async function runPipelineJob(
     quality?: VideoQuality;
     regionCode?: string;
     maxDurationSeconds?: number;
+    concurrency?: number;
   } = {}
 ): Promise<void> {
   const {
@@ -38,6 +63,7 @@ export async function runPipelineJob(
     quality = "720p",
     regionCode = "US",
     maxDurationSeconds = 1200,
+    concurrency,
   } = opts;
   await createJob(jobId, keyword, maxResults, quality, regionCode);
 
@@ -45,7 +71,7 @@ export async function runPipelineJob(
     await updateJob(jobId, { status: "searching" });
     const videos = await searchYouTubeVideos(keyword, { maxResults, regionCode, maxDurationSeconds });
     await updateJob(jobId, { status: "downloading", videos_found: videos.length });
-    await runDownloadJob(jobId, keyword, videos, { quality, regionCode, skipJobCreate: true });
+    await runDownloadJob(jobId, keyword, videos, { quality, regionCode, skipJobCreate: true, concurrency });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     await updateJob(jobId, { status: "failed", error: message.slice(0, 1000) });
@@ -61,9 +87,11 @@ export async function runDownloadJob(
     quality?: VideoQuality;
     regionCode?: string;
     skipJobCreate?: boolean;
+    concurrency?: number;
   } = {}
 ): Promise<void> {
-  const { quality = "720p", regionCode = "US", skipJobCreate = false } = opts;
+  const { quality = "720p", regionCode = "US", skipJobCreate = false, concurrency } = opts;
+  const parallel = resolveDownloadConcurrency(concurrency);
 
   if (!skipJobCreate) {
     await createJob(jobId, keyword, videos.length, quality, regionCode);
@@ -82,17 +110,25 @@ export async function runDownloadJob(
     let downloaded = 0;
     let failed = 0;
     let totalBytes = 0;
+    let statsLock = Promise.resolve();
 
-    for (const video of videos) {
-      if (await shouldStop(jobId)) {
-        await resetInProgressVideos(jobId);
-        await updateJob(jobId, { status: "stopped", completed_at: new Date().toISOString() });
-        return;
-      }
+    const syncJobStats = () => {
+      statsLock = statsLock.then(async () => {
+        await updateJob(jobId, {
+          status: "downloading",
+          videos_downloaded: downloaded,
+          videos_failed: failed,
+          total_size_bytes: totalBytes,
+        });
+      });
+      return statsLock;
+    };
 
+    const processVideo = async (video: YouTubeVideo) => {
       let tmpPath: string | null = null;
       let tmpTranscriptPath: string | null = null;
       let tmpStemPath: string | null = null;
+
       try {
         await updateVideoStatus(jobId, video.videoId, { status: "downloading" });
         const dl = await downloadYouTubeVideo(
@@ -105,7 +141,6 @@ export async function runDownloadJob(
         tmpTranscriptPath = dl.transcriptPath;
         tmpStemPath = tmpPath.replace(/\.(mp4|mkv)$/i, "");
 
-        await updateJob(jobId, { status: "uploading" });
         await updateVideoStatus(jobId, video.videoId, { status: "uploading" });
         const r2 = await uploadToR2(dl.filePath, keyword, video.videoId, {
           title: video.title.slice(0, 250),
@@ -157,11 +192,7 @@ export async function runDownloadJob(
 
         downloaded++;
         totalBytes += r2.fileSizeBytes;
-        await updateJob(jobId, {
-          status: "downloading",
-          videos_downloaded: downloaded,
-          total_size_bytes: totalBytes,
-        });
+        await syncJobStats();
       } catch (err: unknown) {
         failed++;
         const message = err instanceof Error ? err.message : String(err);
@@ -170,13 +201,45 @@ export async function runDownloadJob(
           error: message.slice(0, 500),
           transcript_status: "failed",
         });
-        await updateJob(jobId, { videos_failed: failed });
+        await syncJobStats();
       } finally {
         if (tmpPath) cleanupTempFile(tmpPath);
         if (tmpTranscriptPath) cleanupTempFile(tmpTranscriptPath);
         if (tmpStemPath) cleanupTempSubtitleStem(tmpStemPath);
-        await jitter(2000, 5000);
+        if (parallel === 1) {
+          await jitter(2000, 5000);
+        } else {
+          await jitter(1000, 2500);
+        }
       }
+    };
+
+    let stopRequested = false;
+
+    await runWithConcurrency(
+      videos,
+      parallel,
+      processVideo,
+      async () => {
+        if (stopRequested) return true;
+        if (await shouldStop(jobId)) {
+          stopRequested = true;
+          return true;
+        }
+        return false;
+      }
+    );
+
+    if (stopRequested) {
+      await resetInProgressVideos(jobId);
+      await updateJob(jobId, {
+        status: "stopped",
+        videos_downloaded: downloaded,
+        videos_failed: failed,
+        total_size_bytes: totalBytes,
+        completed_at: new Date().toISOString(),
+      });
+      return;
     }
 
     await updateJob(jobId, {

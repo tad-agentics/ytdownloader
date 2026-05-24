@@ -17,6 +17,7 @@ import {
   DEFAULT_MAX_DURATION_SECONDS,
   MAX_DURATION_OPTIONS,
 } from "@/lib/pipeline/duration-limits";
+import { resolveDownloadConcurrency } from "@/lib/pipeline/download-concurrency";
 
 const TERMINAL_JOB_STATUSES = ["done", "failed", "stopped"];
 
@@ -37,8 +38,9 @@ function mapSearchVideo(keyword: string, v: YouTubeVideo): VideoState {
     r2PublicUrl: null,
     storedAt: null,
     transcriptStatus: "pending",
-    transcriptLang: null,
+    transcriptLang: v.transcriptLang ?? null,
     transcriptUrl: null,
+    transcriptAvailable: v.transcriptAvailable ?? null,
     error: null,
   };
 }
@@ -74,6 +76,7 @@ function mapDbVideo(v: PipelineVideo): VideoState {
     transcriptStatus: v.transcript_status || "pending",
     transcriptLang: v.transcript_lang,
     transcriptUrl: v.transcript_public_url,
+    transcriptAvailable: null,
     error: v.error,
   };
 }
@@ -115,6 +118,9 @@ export default function Page() {
   const [maxResults, setMaxResults] = useState(8);
   const [maxDurationSeconds, setMaxDurationSeconds] = useState(DEFAULT_MAX_DURATION_SECONDS);
   const [quality, setQuality] = useState("720p");
+  const [downloadConcurrency, setDownloadConcurrency] = useState(() =>
+    resolveDownloadConcurrency()
+  );
   const [regionCode, setRegionCode] = useState("US");
   const [videos, setVideos] = useState<VideoState[]>([]);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
@@ -401,7 +407,7 @@ export default function Page() {
     const res = await fetch("/api/pipeline/download", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selections, quality, regionCode }),
+      body: JSON.stringify({ selections, quality, regionCode, concurrency: downloadConcurrency }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -433,6 +439,7 @@ export default function Page() {
   const failed = videos.filter((v) => v.status === "failed").length;
   const transcripts = videos.filter((v) => v.transcriptStatus === "stored").length;
   const total = videos.length;
+  const pickWithTranscript = videos.filter((v) => v.transcriptAvailable).length;
   const active = videos.filter((v) => ["downloading", "uploading"].includes(v.status)).length;
   const storedMb = videos
     .filter((v) => v.status === "done")
@@ -474,7 +481,7 @@ export default function Page() {
             <span className={`hdot ${dotClass(health.r2)}`} />
             R2 · {serviceLabel(health.r2, { ok: "connected", unconfigured: "not configured", error: "offline" })}
           </div>
-          <div className="hpill">{regionCode} · {quality}</div>
+          <div className="hpill">{regionCode} · {quality} · {downloadConcurrency}×</div>
         </div>
       </header>
 
@@ -499,6 +506,8 @@ export default function Page() {
               maxDurationOptions={MAX_DURATION_OPTIONS}
               quality={quality}
               onQualityChange={setQuality}
+              downloadConcurrency={downloadConcurrency}
+              onDownloadConcurrencyChange={(n) => setDownloadConcurrency(resolveDownloadConcurrency(n))}
               regionCode={regionCode}
               onRegionCodeChange={setRegionCode}
               regionOptions={YOUTUBE_REGION_OPTIONS}
@@ -516,7 +525,8 @@ export default function Page() {
               <div className="search-state">
                 <div className="spinner" />
                 <span>
-                  Searching YouTube for {keywords.length} keyword{keywords.length > 1 ? "s" : ""}…
+                  Searching YouTube and checking transcripts for {keywords.length} keyword
+                  {keywords.length > 1 ? "s" : ""}…
                 </span>
                 <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
                   youtube.com/v3/search · region={regionCode}
@@ -530,6 +540,7 @@ export default function Page() {
                   <span className="vgrid-title">Pick videos to download</span>
                   <span className="vgrid-meta">
                     {selectedKeys.size} of {total} selected
+                    {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
                   </span>
                 </div>
                 <div className="select-toolbar">
@@ -543,6 +554,23 @@ export default function Page() {
                   <button type="button" className="select-btn" onClick={() => setSelectedKeys(new Set())}>
                     Clear selection
                   </button>
+                  <button
+                    type="button"
+                    className="select-btn"
+                    onClick={() =>
+                      setSelectedKeys(
+                        new Set(
+                          videos.filter((v) => v.transcriptAvailable).map((v) => selectionKey(v))
+                        )
+                      )
+                    }
+                  >
+                    Select with transcript only
+                  </button>
+                </div>
+                <div className="select-legend">
+                  <span className="vtranscript-badge yes inline">CC ✓</span> transcript available
+                  <span className="vtranscript-badge no inline">CC ✗</span> no transcript
                 </div>
                 <VideoGrid
                   videos={videos}

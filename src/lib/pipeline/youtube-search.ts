@@ -65,6 +65,8 @@ export interface YouTubeVideo {
   viewCount: number;
   duration: string;
   durationSeconds: number;
+  transcriptAvailable?: boolean;
+  transcriptLang?: string | null;
 }
 
 export async function searchYouTubeVideos(
