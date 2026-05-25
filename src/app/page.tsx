@@ -142,6 +142,7 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [probingTranscripts, setProbingTranscripts] = useState(false);
+  const [probeProgress, setProbeProgress] = useState({ done: 0, total: 0 });
   const [lastSearchExcluded, setLastSearchExcluded] = useState(0);
   const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
     []
@@ -352,6 +353,65 @@ export default function Page() {
     });
   };
 
+  const applyProbeResults = useCallback(
+    (
+      probes: Array<{
+        videoId: string;
+        keyword?: string;
+        transcriptAvailable: boolean;
+        transcriptLang: string | null;
+      }>
+    ) => {
+      const probeMap = new Map(probes.map((p) => [`${p.keyword ?? ""}::${p.videoId}`, p]));
+
+      setVideos((prev) =>
+        prev.map((v) => {
+          const p = probeMap.get(selectionKey(v));
+          if (!p) return v;
+          return {
+            ...v,
+            transcriptAvailable: p.transcriptAvailable,
+            transcriptLang: p.transcriptLang,
+          };
+        })
+      );
+
+      setSearchResults((prev) =>
+        prev.map((row) => ({
+          ...row,
+          videos: row.videos.map((v) => {
+            const p = probeMap.get(`${row.keyword}::${v.videoId}`);
+            if (!p) return v;
+            return {
+              ...v,
+              transcriptAvailable: p.transcriptAvailable,
+              transcriptLang: p.transcriptLang,
+            };
+          }),
+        }))
+      );
+    },
+    []
+  );
+
+  const markUnprobedTranscripts = useCallback(() => {
+    setVideos((prev) =>
+      prev.map((v) =>
+        v.transcriptAvailable === null ? { ...v, transcriptAvailable: false, transcriptLang: null } : v
+      )
+    );
+    setSearchResults((prev) =>
+      prev.map((row) => ({
+        ...row,
+        videos: row.videos.map((v) =>
+          v.transcriptAvailable === null
+            ? { ...v, transcriptAvailable: false, transcriptLang: null }
+            : v
+        ),
+      }))
+    );
+  }, []);
+
   const probeTranscripts = useCallback(
     async (results: Array<{ keyword: string; videos: YouTubeVideo[] }>) => {
       const payload = results.flatMap((row) =>
@@ -363,57 +423,42 @@ export default function Page() {
       );
       if (!payload.length) return;
 
+      const BATCH = 6;
       setProbingTranscripts(true);
+      setProbeProgress({ done: 0, total: payload.length });
+
       try {
-        const res = await fetch("/api/pipeline/probe-transcripts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ videos: payload }),
-        });
-        const data = await res.json();
-        if (!res.ok) return;
+        for (let i = 0; i < payload.length; i += BATCH) {
+          const batch = payload.slice(i, i + BATCH);
+          const res = await fetch("/api/pipeline/probe-transcripts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videos: batch }),
+          });
+          const data = await res.json().catch(() => ({}));
 
-        const probes = (data.probes || []) as Array<{
-          videoId: string;
-          keyword?: string;
-          transcriptAvailable: boolean;
-          transcriptLang: string | null;
-        }>;
-        const probeMap = new Map<string, (typeof probes)[number]>(
-          probes.map((p) => [`${p.keyword ?? ""}::${p.videoId}`, p])
-        );
-
-        setVideos((prev) =>
-          prev.map((v) => {
-            const p = probeMap.get(selectionKey(v));
-            if (!p) return v;
-            return {
-              ...v,
-              transcriptAvailable: p.transcriptAvailable,
-              transcriptLang: p.transcriptLang,
-            };
-          })
-        );
-
-        setSearchResults((prev) =>
-          prev.map((row) => ({
-            ...row,
-            videos: row.videos.map((v) => {
-              const p = probeMap.get(`${row.keyword}::${v.videoId}`);
-              if (!p) return v;
-              return {
-                ...v,
-                transcriptAvailable: p.transcriptAvailable,
-                transcriptLang: p.transcriptLang,
-              };
-            }),
-          }))
-        );
+          if (res.ok && Array.isArray(data.probes)) {
+            applyProbeResults(data.probes);
+            setProbeProgress({ done: Math.min(i + batch.length, payload.length), total: payload.length });
+          } else {
+            applyProbeResults(
+              batch.map((v) => ({
+                videoId: v.videoId,
+                keyword: v.keyword,
+                transcriptAvailable: false,
+                transcriptLang: null,
+              }))
+            );
+            setProbeProgress({ done: Math.min(i + batch.length, payload.length), total: payload.length });
+          }
+        }
       } finally {
+        markUnprobedTranscripts();
         setProbingTranscripts(false);
+        setProbeProgress({ done: payload.length, total: payload.length });
       }
     },
-    []
+    [applyProbeResults, markUnprobedTranscripts]
   );
 
   const handleSearch = async () => {
@@ -629,7 +674,9 @@ export default function Page() {
                     {selectedKeys.size} of {total} selected
                     {lastSearchExcluded > 0 ? ` · ${lastSearchExcluded} already stored (hidden)` : ""}
                     {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
-                    {probingTranscripts ? " · checking transcripts…" : ""}
+                    {probingTranscripts
+                      ? ` · checking CC ${probeProgress.done}/${probeProgress.total}`
+                      : ""}
                   </span>
                 </div>
                 <div className="select-toolbar">
@@ -658,8 +705,9 @@ export default function Page() {
                   </button>
                 </div>
                 <div className="select-legend">
-                  <span className="vtranscript-badge yes inline">CC ✓</span> transcript available
-                  <span className="vtranscript-badge no inline">CC ✗</span> no transcript
+                  <span className="vtranscript-badge pending inline">CC …</span> checking English CC
+                  <span className="vtranscript-badge yes inline">CC ✓</span> available
+                  <span className="vtranscript-badge no inline">CC ✗</span> not found
                 </div>
                 <VideoGrid
                   videos={videos}

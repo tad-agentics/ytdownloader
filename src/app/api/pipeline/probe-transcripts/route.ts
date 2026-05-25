@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { enrichVideosWithTranscriptAvailability } from "@/lib/pipeline/transcript-probe";
+import {
+  enrichVideosWithTranscriptAvailability,
+  MAX_PROBE_BATCH,
+} from "@/lib/pipeline/transcript-probe";
 
 export const maxDuration = 300;
 
@@ -10,22 +13,27 @@ type ProbeInput = {
 };
 
 export async function POST(req: NextRequest) {
-  const { videos } = await req.json();
+  try {
+    const { videos } = await req.json();
 
-  if (!Array.isArray(videos) || !videos.length) {
-    return NextResponse.json({ error: "videos[] required" }, { status: 400 });
+    if (!Array.isArray(videos) || !videos.length) {
+      return NextResponse.json({ error: "videos[] required" }, { status: 400 });
+    }
+
+    const rows = (videos as ProbeInput[]).filter((v) => v?.videoId && v?.url).slice(0, MAX_PROBE_BATCH);
+    const enriched = await enrichVideosWithTranscriptAvailability(rows, { concurrency: 6 });
+
+    return NextResponse.json({
+      success: true,
+      probes: enriched.map((v) => ({
+        videoId: v.videoId,
+        keyword: (v as ProbeInput).keyword,
+        transcriptAvailable: v.transcriptAvailable,
+        transcriptLang: v.transcriptLang,
+      })),
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const rows = (videos as ProbeInput[]).filter((v) => v?.videoId && v?.url);
-  const enriched = await enrichVideosWithTranscriptAvailability(rows, { concurrency: 8 });
-
-  return NextResponse.json({
-    success: true,
-    probes: enriched.map((v) => ({
-      videoId: v.videoId,
-      keyword: v.keyword,
-      transcriptAvailable: v.transcriptAvailable,
-      transcriptLang: v.transcriptLang,
-    })),
-  });
 }
