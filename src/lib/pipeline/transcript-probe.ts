@@ -4,7 +4,7 @@ import { pickEnglishLang } from "./subtitle-languages";
 
 const PLAYER_CLIENTS = ["android_vr,tv,ios,android", "mweb,web_safari,web"];
 
-const PROBE_TIMEOUT_MS = 12_000;
+const PROBE_TIMEOUT_MS = 10_000;
 const MAX_PROBE_BATCH = 12;
 
 function pickLangFromTracks(
@@ -132,8 +132,8 @@ async function runProbeOnce(url: string, videoId: string, playerClients: string)
   }
 }
 
-const PROBE_RETRIES = 2;
-const PROBE_RETRY_DELAY_MS = 900;
+const PROBE_RETRIES = 1;
+const PROBE_RETRY_DELAY_MS = 600;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
