@@ -499,6 +499,7 @@ export default function Page() {
       const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
       const totalExcluded = Number(data.totalExcluded ?? 0);
       const totalExcludedNoCc = Number(data.totalExcludedNoCc ?? 0);
+      const totalProbesFailed = Number(data.totalProbesFailed ?? 0);
       setLastSearchExcluded(totalExcluded);
       setLastSearchExcludedNoCc(totalExcludedNoCc);
       const found = results.flatMap((row) => row.videos);
@@ -508,9 +509,9 @@ export default function Page() {
           window.alert(
             `All ${totalExcluded} result${totalExcluded > 1 ? "s" : ""} from this search are already in your library. Try different keywords or increase videos per keyword.`
           );
-        } else if (englishCcOnly && (totalExcluded > 0 || totalExcludedNoCc > 0)) {
+        } else if (englishCcOnly && (totalExcluded > 0 || totalExcludedNoCc > 0 || totalProbesFailed > 0)) {
           window.alert(
-            `No videos with English CC found. ${totalExcludedNoCc > 0 ? `${totalExcludedNoCc} had no English captions. ` : ""}${totalExcluded > 0 ? `${totalExcluded} already in your library. ` : ""}Try different keywords, turn off "English CC only", or increase videos per keyword.`
+            `No videos with English CC found.${totalExcludedNoCc > 0 ? ` ${totalExcludedNoCc} had no English captions.` : ""}${totalProbesFailed > 0 ? ` ${totalProbesFailed} could not be verified (YouTube rate limit).` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
           );
         } else {
           window.alert(
