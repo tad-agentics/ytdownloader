@@ -218,4 +218,42 @@ export async function enrichVideosWithTranscriptAvailability<
   return out;
 }
 
+export async function filterToEnglishTranscripts<
+  T extends { videoId: string; url: string },
+>(
+  videos: T[],
+  targetCount: number
+): Promise<{
+  videos: Array<T & { transcriptAvailable: true; transcriptLang: string | null }>;
+  excludedNoCc: number;
+}> {
+  if (!videos.length || targetCount <= 0) return { videos: [], excludedNoCc: 0 };
+
+  const out: Array<T & { transcriptAvailable: true; transcriptLang: string | null }> = [];
+  let excludedNoCc = 0;
+  const BATCH = 4;
+
+  for (let i = 0; i < videos.length && out.length < targetCount; i += BATCH) {
+    const batch = videos.slice(i, i + BATCH);
+    const probed = await enrichVideosWithTranscriptAvailability(batch, {
+      concurrency: 2,
+      fast: true,
+    });
+    for (const video of probed) {
+      if (video.transcriptAvailable === true) {
+        out.push({
+          ...video,
+          transcriptAvailable: true,
+          transcriptLang: video.transcriptLang,
+        });
+        if (out.length >= targetCount) break;
+      } else {
+        excludedNoCc++;
+      }
+    }
+  }
+
+  return { videos: out, excludedNoCc };
+}
+
 export { MAX_PROBE_BATCH };

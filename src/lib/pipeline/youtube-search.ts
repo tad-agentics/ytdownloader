@@ -80,6 +80,7 @@ export async function searchYouTubeVideos(
     order?: "relevance" | "viewCount" | "date";
     videoDuration?: "any" | "short" | "medium" | "long";
     maxDurationSeconds?: number;
+    requireCaptions?: boolean;
   } = {}
 ): Promise<YouTubeVideo[]> {
   const {
@@ -89,6 +90,7 @@ export async function searchYouTubeVideos(
     order = "relevance",
     videoDuration,
     maxDurationSeconds = 0,
+    requireCaptions = false,
   } = options;
   const language = relevanceLanguage || relevanceLanguageForRegion(regionCode);
   const durationFilter = maxDurationSeconds > 0 ? maxDurationSeconds : 0;
@@ -115,6 +117,7 @@ export async function searchYouTubeVideos(
     videoDuration: apiDuration,
     videoEmbeddable: "true",
   });
+  if (requireCaptions) sp.set("videoCaption", "closedCaption");
   const sr = await fetch(`${BASE}/search?${sp}`);
   if (!sr.ok) {
     const e = await sr.json();

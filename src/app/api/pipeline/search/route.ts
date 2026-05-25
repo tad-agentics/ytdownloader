@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listStoredVideoIds } from "@/lib/pipeline/job-store";
+import { filterToEnglishTranscripts } from "@/lib/pipeline/transcript-probe";
 import { searchYouTubeVideos } from "@/lib/pipeline/youtube-search";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const MAX_VIDEOS_PER_KEYWORD = 30;
 
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
     regionCode = "US",
     maxDurationSeconds = 1200,
     excludeStored = true,
+    englishCcOnly = true,
   } = await req.json();
 
   if (!Array.isArray(keywords) || !keywords.length) {
@@ -27,9 +29,11 @@ export async function POST(req: NextRequest) {
   }
 
   const storedIds = excludeStored !== false ? await listStoredVideoIds() : new Set<string>();
-  const fetchPool = excludeStored
-    ? Math.min(Math.max(cappedMax * 4, cappedMax + 4), MAX_VIDEOS_PER_KEYWORD)
-    : cappedMax;
+  const fetchPool = englishCcOnly
+    ? Math.min(Math.max(cappedMax * 4, cappedMax + 8), MAX_VIDEOS_PER_KEYWORD)
+    : excludeStored
+      ? Math.min(Math.max(cappedMax * 4, cappedMax + 4), MAX_VIDEOS_PER_KEYWORD)
+      : cappedMax;
 
   const results = await Promise.all(
     trimmed.map(async (keyword) => {
@@ -37,21 +41,42 @@ export async function POST(req: NextRequest) {
         maxResults: fetchPool,
         regionCode,
         maxDurationSeconds: parseInt(String(maxDurationSeconds), 10) || 0,
+        requireCaptions: Boolean(englishCcOnly),
       });
 
       const fresh = raw.filter((v) => !storedIds.has(v.videoId));
       const excludedStored = raw.length - fresh.length;
 
+      let videos = fresh;
+      let excludedNoCc = 0;
+
+      if (englishCcOnly && fresh.length > 0) {
+        const filtered = await filterToEnglishTranscripts(fresh, cappedMax);
+        excludedNoCc = filtered.excludedNoCc;
+        videos = filtered.videos;
+      } else {
+        videos = fresh.slice(0, cappedMax);
+      }
+
       return {
         keyword,
-        videos: fresh.slice(0, cappedMax),
+        videos,
         excludedStored,
+        excludedNoCc,
       };
     })
   );
 
   const totalFound = results.reduce((sum, row) => sum + row.videos.length, 0);
   const totalExcluded = results.reduce((sum, row) => sum + row.excludedStored, 0);
+  const totalExcludedNoCc = results.reduce((sum, row) => sum + row.excludedNoCc, 0);
 
-  return NextResponse.json({ success: true, results, totalFound, totalExcluded });
+  return NextResponse.json({
+    success: true,
+    results,
+    totalFound,
+    totalExcluded,
+    totalExcludedNoCc,
+    englishCcOnly: Boolean(englishCcOnly),
+  });
 }

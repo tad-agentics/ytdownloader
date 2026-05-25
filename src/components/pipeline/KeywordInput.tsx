@@ -18,6 +18,8 @@ interface KeywordInputProps {
   regionCode: string;
   onRegionCodeChange: (code: string) => void;
   regionOptions: ReadonlyArray<{ code: string; label: string }>;
+  englishCcOnly: boolean;
+  onEnglishCcOnlyChange: (value: boolean) => void;
   isRunning: boolean;
   onSearch: () => void;
   onDownloadSelected: () => void;
@@ -43,6 +45,8 @@ export default function KeywordInput({
   regionCode,
   onRegionCodeChange,
   regionOptions,
+  englishCcOnly,
+  onEnglishCcOnlyChange,
   isRunning,
   onSearch,
   onDownloadSelected,
@@ -192,6 +196,15 @@ export default function KeywordInput({
               </option>
             ))}
           </select>
+          <label className="cfg-check">
+            <input
+              type="checkbox"
+              checked={englishCcOnly}
+              onChange={(e) => onEnglishCcOnlyChange(e.target.checked)}
+              disabled={isRunning || phase === "selecting"}
+            />
+            English CC only
+          </label>
         </div>
         <div className="cfg-actions">
           <button

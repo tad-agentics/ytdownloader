@@ -123,6 +123,7 @@ export default function Page() {
     resolveDownloadConcurrency()
   );
   const [regionCode, setRegionCode] = useState("US");
+  const [englishCcOnly, setEnglishCcOnly] = useState(true);
   const [videos, setVideos] = useState<VideoState[]>([]);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [r2Storage, setR2Storage] = useState<{ totalBytes: number; objectCount: number } | null>(
@@ -143,6 +144,7 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [lastSearchExcluded, setLastSearchExcluded] = useState(0);
+  const [lastSearchExcludedNoCc, setLastSearchExcludedNoCc] = useState(0);
   const [probingKeys, setProbingKeys] = useState<Set<string>>(new Set());
   const [probeProgress, setProbeProgress] = useState({ done: 0, total: 0 });
   const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
@@ -470,6 +472,7 @@ export default function Page() {
     setSearchResults([]);
     setSelectedKeys(new Set());
     setLastSearchExcluded(0);
+    setLastSearchExcludedNoCc(0);
     setProbingKeys(new Set());
     setProbeProgress({ done: 0, total: 0 });
     setPhase("searching");
@@ -478,7 +481,13 @@ export default function Page() {
       const res = await fetch("/api/pipeline/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keywords, maxResults, regionCode, maxDurationSeconds }),
+        body: JSON.stringify({
+          keywords,
+          maxResults,
+          regionCode,
+          maxDurationSeconds,
+          englishCcOnly,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -489,13 +498,19 @@ export default function Page() {
 
       const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
       const totalExcluded = Number(data.totalExcluded ?? 0);
+      const totalExcludedNoCc = Number(data.totalExcludedNoCc ?? 0);
       setLastSearchExcluded(totalExcluded);
+      setLastSearchExcludedNoCc(totalExcludedNoCc);
       const found = results.flatMap((row) => row.videos);
 
       if (!found.length) {
-        if (totalExcluded > 0) {
+        if (totalExcluded > 0 && !englishCcOnly) {
           window.alert(
             `All ${totalExcluded} result${totalExcluded > 1 ? "s" : ""} from this search are already in your library. Try different keywords or increase videos per keyword.`
+          );
+        } else if (englishCcOnly && (totalExcluded > 0 || totalExcludedNoCc > 0)) {
+          window.alert(
+            `No videos with English CC found. ${totalExcludedNoCc > 0 ? `${totalExcludedNoCc} had no English captions. ` : ""}${totalExcluded > 0 ? `${totalExcluded} already in your library. ` : ""}Try different keywords, turn off "English CC only", or increase videos per keyword.`
           );
         } else {
           window.alert(
@@ -511,7 +526,7 @@ export default function Page() {
       setVideos(mapped);
       setSelectedKeys(new Set(mapped.map((v) => selectionKey(v))));
       setPhase("selecting");
-      void probeTranscripts(results);
+      if (!englishCcOnly) void probeTranscripts(results);
     } finally {
       runRef.current = false;
     }
@@ -646,6 +661,8 @@ export default function Page() {
               regionCode={regionCode}
               onRegionCodeChange={setRegionCode}
               regionOptions={YOUTUBE_REGION_OPTIONS}
+              englishCcOnly={englishCcOnly}
+              onEnglishCcOnlyChange={setEnglishCcOnly}
               isRunning={isRunning}
               onSearch={handleSearch}
               onDownloadSelected={handleDownloadSelected}
@@ -660,11 +677,13 @@ export default function Page() {
               <div className="search-state">
                 <div className="spinner" />
                 <span>
-                  Searching YouTube for {keywords.length} keyword
-                  {keywords.length > 1 ? "s" : ""}…
+                  {englishCcOnly
+                    ? `Searching YouTube for English CC videos (${keywords.length} keyword${keywords.length > 1 ? "s" : ""})…`
+                    : `Searching YouTube for ${keywords.length} keyword${keywords.length > 1 ? "s" : ""}…`}
                 </span>
                 <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
-                  youtube.com/v3/search · region={regionCode}
+                  youtube.com/v3/search
+                  {englishCcOnly ? " · captions + yt-dlp" : ""} · region={regionCode}
                 </span>
               </div>
             )}
@@ -676,6 +695,7 @@ export default function Page() {
                   <span className="vgrid-meta">
                     {selectedKeys.size} of {total} selected
                     {lastSearchExcluded > 0 ? ` · ${lastSearchExcluded} already stored (hidden)` : ""}
+                    {lastSearchExcludedNoCc > 0 ? ` · ${lastSearchExcludedNoCc} no English CC (hidden)` : ""}
                     {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
                     {probingKeys.size > 0
                       ? ` · checking CC ${probeProgress.done}/${probeProgress.total}`

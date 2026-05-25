@@ -295,6 +295,21 @@ body {
   gap: 8px;
 }
 
+.cfg-check {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--tx2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cfg-check input {
+  accent-color: var(--accent);
+}
+
 .cfg-actions {
   display: flex;
   flex-wrap: wrap;
