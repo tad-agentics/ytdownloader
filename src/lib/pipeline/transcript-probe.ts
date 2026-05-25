@@ -123,24 +123,35 @@ async function runProbeOnce(url: string, videoId: string, playerClients: string)
   }
 }
 
+const PROBE_RETRIES = 2;
+const PROBE_RETRY_DELAY_MS = 900;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function probeTranscriptAvailability(
   url: string,
   videoId: string
-): Promise<{ available: boolean; lang: string | null }> {
+): Promise<{ available: boolean; lang: string | null; checked: boolean }> {
   let lastError = "probe failed";
 
-  for (const clients of PLAYER_CLIENTS) {
-    try {
-      const lang = await runProbeOnce(url, videoId, clients);
-      return { available: lang !== null, lang };
-    } catch (err: unknown) {
-      lastError = err instanceof Error ? err.message : String(err);
-      if (!isBotBlockError(lastError)) break;
+  for (let attempt = 0; attempt <= PROBE_RETRIES; attempt++) {
+    if (attempt > 0) await sleep(PROBE_RETRY_DELAY_MS * attempt);
+
+    for (const clients of PLAYER_CLIENTS) {
+      try {
+        const lang = await runProbeOnce(url, videoId, clients);
+        return { available: lang !== null, lang, checked: true };
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
+        if (!isBotBlockError(lastError)) break;
+      }
     }
   }
 
   console.warn(`Transcript probe failed for ${videoId}: ${lastError}`);
-  return { available: false, lang: null };
+  return { available: false, lang: null, checked: false };
 }
 
 export async function enrichVideosWithTranscriptAvailability<
@@ -148,11 +159,20 @@ export async function enrichVideosWithTranscriptAvailability<
 >(
   videos: T[],
   opts: { concurrency?: number } = {}
-): Promise<Array<T & { transcriptAvailable: boolean; transcriptLang: string | null }>> {
+): Promise<
+  Array<
+    T & {
+      transcriptAvailable: boolean | null;
+      transcriptLang: string | null;
+    }
+  >
+> {
   if (!videos.length) return [];
 
-  const concurrency = Math.min(Math.max(opts.concurrency ?? 6, 1), 12);
-  const out: Array<T & { transcriptAvailable: boolean; transcriptLang: string | null }> = [];
+  const concurrency = Math.min(Math.max(opts.concurrency ?? 2, 1), 4);
+  const out: Array<
+    T & { transcriptAvailable: boolean | null; transcriptLang: string | null }
+  > = [];
   let index = 0;
 
   async function worker() {
@@ -162,8 +182,8 @@ export async function enrichVideosWithTranscriptAvailability<
       const probe = await probeTranscriptAvailability(video.url, video.videoId);
       out[i] = {
         ...video,
-        transcriptAvailable: probe.available,
-        transcriptLang: probe.lang,
+        transcriptAvailable: probe.checked ? probe.available : null,
+        transcriptLang: probe.checked ? probe.lang : null,
       };
     }
   }

@@ -358,7 +358,7 @@ export default function Page() {
       probes: Array<{
         videoId: string;
         keyword?: string;
-        transcriptAvailable: boolean;
+        transcriptAvailable: boolean | null;
         transcriptLang: string | null;
       }>
     ) => {
@@ -394,24 +394,6 @@ export default function Page() {
     []
   );
 
-  const markUnprobedTranscripts = useCallback(() => {
-    setVideos((prev) =>
-      prev.map((v) =>
-        v.transcriptAvailable === null ? { ...v, transcriptAvailable: false, transcriptLang: null } : v
-      )
-    );
-    setSearchResults((prev) =>
-      prev.map((row) => ({
-        ...row,
-        videos: row.videos.map((v) =>
-          v.transcriptAvailable === null
-            ? { ...v, transcriptAvailable: false, transcriptLang: null }
-            : v
-        ),
-      }))
-    );
-  }, []);
-
   const probeTranscripts = useCallback(
     async (results: Array<{ keyword: string; videos: YouTubeVideo[] }>) => {
       const payload = results.flatMap((row) =>
@@ -423,42 +405,43 @@ export default function Page() {
       );
       if (!payload.length) return;
 
-      const BATCH = 6;
+      const BATCH = 4;
       setProbingTranscripts(true);
       setProbeProgress({ done: 0, total: payload.length });
+
+      const probeBatch = async (batch: typeof payload, attempt: number): Promise<boolean> => {
+        const res = await fetch("/api/pipeline/probe-transcripts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ videos: batch }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && Array.isArray(data.probes)) {
+          applyProbeResults(data.probes);
+          return true;
+        }
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+          return probeBatch(batch, attempt + 1);
+        }
+        return false;
+      };
 
       try {
         for (let i = 0; i < payload.length; i += BATCH) {
           const batch = payload.slice(i, i + BATCH);
-          const res = await fetch("/api/pipeline/probe-transcripts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ videos: batch }),
-          });
-          const data = await res.json().catch(() => ({}));
-
-          if (res.ok && Array.isArray(data.probes)) {
-            applyProbeResults(data.probes);
-            setProbeProgress({ done: Math.min(i + batch.length, payload.length), total: payload.length });
-          } else {
-            applyProbeResults(
-              batch.map((v) => ({
-                videoId: v.videoId,
-                keyword: v.keyword,
-                transcriptAvailable: false,
-                transcriptLang: null,
-              }))
-            );
-            setProbeProgress({ done: Math.min(i + batch.length, payload.length), total: payload.length });
+          await probeBatch(batch, 0);
+          setProbeProgress({ done: Math.min(i + batch.length, payload.length), total: payload.length });
+          if (i + BATCH < payload.length) {
+            await new Promise((r) => setTimeout(r, 400));
           }
         }
       } finally {
-        markUnprobedTranscripts();
         setProbingTranscripts(false);
         setProbeProgress({ done: payload.length, total: payload.length });
       }
     },
-    [applyProbeResults, markUnprobedTranscripts]
+    [applyProbeResults]
   );
 
   const handleSearch = async () => {
@@ -705,12 +688,14 @@ export default function Page() {
                   </button>
                 </div>
                 <div className="select-legend">
-                  <span className="vtranscript-badge pending inline">CC …</span> checking English CC
-                  <span className="vtranscript-badge yes inline">CC ✓</span> available
-                  <span className="vtranscript-badge no inline">CC ✗</span> not found
+                  <span className="vtranscript-badge pending inline">CC …</span> checking
+                  <span className="vtranscript-badge yes inline">CC ✓</span> English CC found
+                  <span className="vtranscript-badge no inline">CC ✗</span> no English CC
+                  <span className="vtranscript-badge unknown inline">CC ?</span> could not verify
                 </div>
                 <VideoGrid
                   videos={videos}
+                  transcriptCheckDone={!probingTranscripts}
                   selectable
                   selectedKeys={selectedKeys}
                   onToggle={toggleVideoSelection}

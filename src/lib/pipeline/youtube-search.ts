@@ -65,7 +65,7 @@ export interface YouTubeVideo {
   viewCount: number;
   duration: string;
   durationSeconds: number;
-  transcriptAvailable?: boolean;
+  transcriptAvailable?: boolean | null;
   transcriptLang?: string | null;
 }
 

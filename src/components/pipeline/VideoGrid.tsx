@@ -45,6 +45,7 @@ function VideoCard({
   selectable,
   selected,
   onToggle,
+  transcriptCheckDone,
 }: {
   v: VideoState;
   deletable?: boolean;
@@ -53,6 +54,7 @@ function VideoCard({
   selectable?: boolean;
   selected?: boolean;
   onToggle?: (v: VideoState) => void;
+  transcriptCheckDone?: boolean;
 }) {
   const colors = ["#dbeafe", "#fce7f3", "#dcfce7", "#fef9c3", "#ede9fe", "#ffedd5"];
   const bg = colors[Math.abs(v.videoId.charCodeAt(0)) % colors.length];
@@ -107,16 +109,25 @@ function VideoCard({
             CC …
           </span>
         )}
-        {selectable && v.transcriptAvailable !== null && (
+        {selectable && v.transcriptAvailable === true && (
           <span
-            className={`vtranscript-badge${v.transcriptAvailable ? " yes" : " no"}`}
-            title={
-              v.transcriptAvailable
-                ? `Transcript available${v.transcriptLang ? ` (${v.transcriptLang})` : ""}`
-                : "No transcript available"
-            }
+            className="vtranscript-badge yes"
+            title={`English CC available${v.transcriptLang ? ` (${v.transcriptLang})` : ""}`}
           >
-            CC {v.transcriptAvailable ? "✓" : "✗"}
+            CC ✓
+          </span>
+        )}
+        {selectable && v.transcriptAvailable === false && (
+          <span className="vtranscript-badge no" title="No English captions detected">
+            CC ✗
+          </span>
+        )}
+        {selectable && v.transcriptAvailable === null && transcriptCheckDone && (
+          <span
+            className="vtranscript-badge unknown"
+            title="Could not verify CC (YouTube rate limit). Download may still include a transcript."
+          >
+            CC ?
           </span>
         )}
         <span className="vdur">{fmtDur(v.durationSeconds)}</span>
@@ -207,6 +218,7 @@ interface VideoGridProps {
   selectable?: boolean;
   selectedKeys?: Set<string>;
   onToggle?: (video: VideoState) => void;
+  transcriptCheckDone?: boolean;
 }
 
 export default function VideoGrid({
@@ -217,6 +229,7 @@ export default function VideoGrid({
   selectable,
   selectedKeys,
   onToggle,
+  transcriptCheckDone,
 }: VideoGridProps) {
   return (
     <div className="vgrid">
@@ -230,6 +243,7 @@ export default function VideoGrid({
           selectable={selectable}
           selected={selectedKeys?.has(selectionKey(v))}
           onToggle={onToggle}
+          transcriptCheckDone={transcriptCheckDone}
         />
       ))}
     </div>
