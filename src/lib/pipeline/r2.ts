@@ -36,6 +36,27 @@ const client = () => {
 
 const BUCKET = () => process.env.R2_BUCKET_NAME?.trim() || "ytdownloader";
 
+/** S3/R2 user metadata is sent as HTTP headers — values must be printable ASCII. */
+function sanitizeMetadataValue(value: string, maxLen = 256): string {
+  const ascii = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\r\n\x00-\x1f\x7f]/g, " ")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+  return ascii || "unknown";
+}
+
+function sanitizeMetadata(fields: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    out[key] = sanitizeMetadataValue(value, key === "title" ? 200 : 128);
+  }
+  return out;
+}
+
 function keywordSlug(keyword: string): string {
   return keyword
     .toLowerCase()
@@ -61,13 +82,13 @@ export async function uploadToR2(
       Body: fs.createReadStream(filePath),
       ContentType: "video/mp4",
       ContentLength: fileSizeBytes,
-      Metadata: {
+      Metadata: sanitizeMetadata({
         keyword,
         videoId,
         pipeline: "ytdownloader-v1",
         uploadedAt: new Date().toISOString(),
         ...metadata,
-      },
+      }),
     },
     queueSize: 4,
     partSize: 10 * 1024 * 1024,
@@ -101,7 +122,7 @@ export async function uploadTranscriptToR2(
       Body: fs.createReadStream(filePath),
       ContentType: "text/plain; charset=utf-8",
       ContentLength: fileSizeBytes,
-      Metadata: {
+      Metadata: sanitizeMetadata({
         keyword,
         videoId,
         lang: safeLang,
@@ -109,7 +130,7 @@ export async function uploadTranscriptToR2(
         pipeline: "ytdownloader-v1",
         uploadedAt: new Date().toISOString(),
         ...metadata,
-      },
+      }),
     },
     queueSize: 2,
     partSize: 5 * 1024 * 1024,
