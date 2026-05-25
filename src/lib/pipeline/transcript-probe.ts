@@ -2,7 +2,7 @@ import { spawn } from "child_process";
 import { getYtdlpCookiesPath } from "./ytdlp-cookies";
 import { pickEnglishLang } from "./subtitle-languages";
 
-const PLAYER_CLIENTS = ["android_vr,tv,ios,android", "mweb,web_safari,web"];
+const PLAYER_CLIENTS = ["tv,web", "android_vr,tv,ios,android", "mweb,web_safari,web"];
 
 const PROBE_TIMEOUT_MS = 12_000;
 const FAST_PROBE_TIMEOUT_MS = 12_000;
@@ -89,6 +89,8 @@ function baseArgs(playerClients: string): string[] {
     "--no-playlist",
     "--socket-timeout",
     "10",
+    "--sleep-requests",
+    "1",
     "--extractor-args",
     `youtube:player_client=${playerClients}`,
     "--user-agent",

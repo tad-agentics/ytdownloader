@@ -473,7 +473,33 @@ export default function Page() {
         const keywordPicks: YouTubeVideo[] = [];
         const pool = row.videos;
 
-        for (let i = 0; i < pool.length && keywordPicks.length < perKeyword; i += BATCH * PARALLEL) {
+        const addPick = (source: YouTubeVideo) => {
+          if (keywordPicks.some((p) => p.videoId === source.videoId)) return;
+          if (keywordPicks.length >= perKeyword) return;
+          const picked: YouTubeVideo = {
+            ...source,
+            transcriptAvailable: true,
+            transcriptLang: source.transcriptLang ?? "en",
+          };
+          keywordPicks.push(picked);
+          const mapped = mapSearchVideo(row.keyword, picked);
+          setVideos((prev) => [...prev, mapped]);
+          setSelectedKeys((prev) => {
+            const next = new Set(prev);
+            next.add(selectionKey(mapped));
+            return next;
+          });
+        };
+
+        // YouTube Data API marks some videos as captioned before yt-dlp runs.
+        for (const source of pool) {
+          if (keywordPicks.length >= perKeyword) break;
+          if (source.transcriptAvailable === true) addPick(source);
+        }
+
+        const toProbe = pool.filter((v) => !keywordPicks.some((p) => p.videoId === v.videoId));
+
+        for (let i = 0; i < toProbe.length && keywordPicks.length < perKeyword; i += BATCH * PARALLEL) {
           const jobs: Promise<
             Array<{
               videoId: string;
@@ -485,7 +511,7 @@ export default function Page() {
 
           for (let slot = 0; slot < PARALLEL; slot++) {
             const start = i + slot * BATCH;
-            const batchVideos = pool.slice(start, start + BATCH);
+            const batchVideos = toProbe.slice(start, start + BATCH);
             if (!batchVideos.length) continue;
             jobs.push(
               fetchProbeBatch(
@@ -504,22 +530,13 @@ export default function Page() {
               if (keywordPicks.length >= perKeyword) break;
               checked++;
               setProbeProgress({ done: checked, total: totalPool });
-              const source = pool.find((v) => v.videoId === probe.videoId);
+              const source = toProbe.find((v) => v.videoId === probe.videoId);
               if (!source) continue;
 
               if (probe.transcriptAvailable === true) {
-                const picked: YouTubeVideo = {
+                addPick({
                   ...source,
-                  transcriptAvailable: true,
                   transcriptLang: probe.transcriptLang,
-                };
-                keywordPicks.push(picked);
-                const mapped = mapSearchVideo(row.keyword, picked);
-                setVideos((prev) => [...prev, mapped]);
-                setSelectedKeys((prev) => {
-                  const next = new Set(prev);
-                  next.add(selectionKey(mapped));
-                  return next;
                 });
               } else if (probe.transcriptAvailable === false) {
                 excludedNoCc++;
@@ -672,7 +689,7 @@ export default function Page() {
         const found = finalResults.flatMap((row) => row.videos);
         if (!found.length) {
           window.alert(
-            `No videos with English CC found.${excludedNoCc > 0 ? ` ${excludedNoCc} candidates had no English captions.` : ""}${probesFailed > 0 ? ` ${probesFailed} could not be verified (YouTube rate limit).` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
+            `No videos with English CC found.${excludedNoCc > 0 ? ` ${excludedNoCc} candidates had no English captions.` : ""}${probesFailed > 0 ? ` ${probesFailed} could not be verified — YouTube is blocking CC checks on the server. Re-export cookies.txt and redeploy.` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
           );
           setVideos([]);
           setPhase("input");
