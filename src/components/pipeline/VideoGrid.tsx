@@ -127,7 +127,7 @@ function VideoCard({
         {selectable && v.transcriptAvailable === null && !isTranscriptProbing && (
           <span
             className="vtranscript-badge unknown"
-            title="CC not verified yet. Badge updates when the check finishes."
+            title="CC check failed (timeout or rate limit). This video may still have captions on YouTube."
           >
             CC ?
           </span>

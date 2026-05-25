@@ -4,8 +4,8 @@ import { pickEnglishLang } from "./subtitle-languages";
 
 const PLAYER_CLIENTS = ["android_vr,tv,ios,android", "mweb,web_safari,web"];
 
-const PROBE_TIMEOUT_MS = 8_000;
-const FAST_PROBE_TIMEOUT_MS = 6_000;
+const PROBE_TIMEOUT_MS = 12_000;
+const FAST_PROBE_TIMEOUT_MS = 12_000;
 const MAX_PROBE_BATCH = 4;
 
 function pickLangFromTracks(
@@ -23,7 +23,8 @@ function parseListSubsOutput(output: string): string[] {
   const langs: string[] = [];
   for (const line of output.split("\n")) {
     const trimmed = line.trim();
-    const match = trimmed.match(/^([a-z]{2,3}(?:-[A-Za-z0-9]+)?)\s+/i);
+    if (!trimmed || /^language\b/i.test(trimmed) || /^available\b/i.test(trimmed)) continue;
+    const match = trimmed.match(/^([a-z]{2,3}(?:-[A-Za-z0-9]+)?)\b/i);
     if (match) langs.push(match[1]);
   }
   return langs;
@@ -115,10 +116,11 @@ async function runListSubsProbe(
 async function runDumpJsonProbe(
   url: string,
   videoId: string,
-  playerClients: string
+  playerClients: string,
+  timeoutMs = PROBE_TIMEOUT_MS
 ): Promise<string | null> {
   const args = [...baseArgs(playerClients), "--dump-json", url];
-  const { stdout } = await runYtdlp(args, videoId, PROBE_TIMEOUT_MS);
+  const { stdout } = await runYtdlp(args, videoId, timeoutMs);
   const data = JSON.parse(stdout) as {
     subtitles?: Record<string, unknown>;
     automatic_captions?: Record<string, unknown>;
@@ -126,11 +128,16 @@ async function runDumpJsonProbe(
   return pickLangFromTracks(data.subtitles, data.automatic_captions);
 }
 
-async function runProbeOnce(url: string, videoId: string, playerClients: string): Promise<string | null> {
+async function runProbeOnce(
+  url: string,
+  videoId: string,
+  playerClients: string,
+  timeoutMs = PROBE_TIMEOUT_MS
+): Promise<string | null> {
   try {
-    return await runListSubsProbe(url, videoId, playerClients);
+    return await runDumpJsonProbe(url, videoId, playerClients, timeoutMs);
   } catch {
-    return runDumpJsonProbe(url, videoId, playerClients);
+    return runListSubsProbe(url, videoId, playerClients, timeoutMs);
   }
 }
 
@@ -148,7 +155,7 @@ export async function probeTranscriptAvailability(
 ): Promise<{ available: boolean; lang: string | null; checked: boolean }> {
   if (opts.fast) {
     try {
-      const lang = await runListSubsProbe(url, videoId, PLAYER_CLIENTS[0], FAST_PROBE_TIMEOUT_MS);
+      const lang = await runProbeOnce(url, videoId, PLAYER_CLIENTS[0], FAST_PROBE_TIMEOUT_MS);
       return { available: lang !== null, lang, checked: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -164,7 +171,7 @@ export async function probeTranscriptAvailability(
 
     for (const clients of PLAYER_CLIENTS) {
       try {
-        const lang = await runProbeOnce(url, videoId, clients);
+        const lang = await runProbeOnce(url, videoId, clients, PROBE_TIMEOUT_MS);
         return { available: lang !== null, lang, checked: true };
       } catch (err: unknown) {
         lastError = err instanceof Error ? err.message : String(err);
