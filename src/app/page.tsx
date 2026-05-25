@@ -142,6 +142,7 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [probingTranscripts, setProbingTranscripts] = useState(false);
+  const [lastSearchExcluded, setLastSearchExcluded] = useState(0);
   const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
     []
   );
@@ -422,6 +423,7 @@ export default function Page() {
     setVideos([]);
     setSearchResults([]);
     setSelectedKeys(new Set());
+    setLastSearchExcluded(0);
     setPhase("searching");
 
     try {
@@ -438,10 +440,20 @@ export default function Page() {
       }
 
       const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
+      const totalExcluded = Number(data.totalExcluded ?? 0);
+      setLastSearchExcluded(totalExcluded);
       const found = results.flatMap((row) => row.videos);
 
       if (!found.length) {
-        window.alert("No videos found for these keywords. Try different keywords or relax the max length filter.");
+        if (totalExcluded > 0) {
+          window.alert(
+            `All ${totalExcluded} result${totalExcluded > 1 ? "s" : ""} from this search are already in your library. Try different keywords or increase videos per keyword.`
+          );
+        } else {
+          window.alert(
+            "No videos found for these keywords. Try different keywords or relax the max length filter."
+          );
+        }
         setPhase("input");
         return;
       }
@@ -615,6 +627,7 @@ export default function Page() {
                   <span className="vgrid-title">Pick videos to download</span>
                   <span className="vgrid-meta">
                     {selectedKeys.size} of {total} selected
+                    {lastSearchExcluded > 0 ? ` · ${lastSearchExcluded} already stored (hidden)` : ""}
                     {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
                     {probingTranscripts ? " · checking transcripts…" : ""}
                   </span>

@@ -164,6 +164,15 @@ export async function deleteVideoRecord(jobId: string, videoId: string) {
   if (error) throw new Error(`deleteVideoRecord: ${error.message}`);
 }
 
+export async function listStoredVideoIds(): Promise<Set<string>> {
+  const { data, error } = await db()
+    .from("pipeline_videos")
+    .select("video_id")
+    .eq("status", "stored");
+  if (error) throw new Error(`listStoredVideoIds: ${error.message}`);
+  return new Set((data || []).map((row) => row.video_id as string));
+}
+
 export async function listStoredVideos(limit = 50): Promise<PipelineVideo[]> {
   const { data, error } = await db()
     .from("pipeline_videos")

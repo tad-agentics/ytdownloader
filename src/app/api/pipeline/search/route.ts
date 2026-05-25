@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { listStoredVideoIds } from "@/lib/pipeline/job-store";
 import { searchYouTubeVideos } from "@/lib/pipeline/youtube-search";
 
 export const maxDuration = 120;
@@ -11,6 +12,7 @@ export async function POST(req: NextRequest) {
     maxResults = 10,
     regionCode = "US",
     maxDurationSeconds = 1200,
+    excludeStored = true,
   } = await req.json();
 
   if (!Array.isArray(keywords) || !keywords.length) {
@@ -24,18 +26,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "At least one keyword required" }, { status: 400 });
   }
 
+  const storedIds = excludeStored !== false ? await listStoredVideoIds() : new Set<string>();
+  const fetchPool = excludeStored
+    ? Math.min(Math.max(cappedMax * 4, cappedMax + 4), MAX_VIDEOS_PER_KEYWORD)
+    : cappedMax;
+
   const results = await Promise.all(
     trimmed.map(async (keyword) => {
-      const videos = await searchYouTubeVideos(keyword, {
-        maxResults: cappedMax,
+      const raw = await searchYouTubeVideos(keyword, {
+        maxResults: fetchPool,
         regionCode,
         maxDurationSeconds: parseInt(String(maxDurationSeconds), 10) || 0,
       });
-      return { keyword, videos };
+
+      const fresh = raw.filter((v) => !storedIds.has(v.videoId));
+      const excludedStored = raw.length - fresh.length;
+
+      return {
+        keyword,
+        videos: fresh.slice(0, cappedMax),
+        excludedStored,
+      };
     })
   );
 
   const totalFound = results.reduce((sum, row) => sum + row.videos.length, 0);
+  const totalExcluded = results.reduce((sum, row) => sum + row.excludedStored, 0);
 
-  return NextResponse.json({ success: true, results, totalFound });
+  return NextResponse.json({ success: true, results, totalFound, totalExcluded });
 }
