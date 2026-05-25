@@ -35,8 +35,9 @@ function isBotBlockError(message: string): boolean {
 function runYtdlp(
   args: string[],
   videoId: string,
-  timeoutMs: number
-): Promise<{ stdout: string; stderr: string }> {
+  timeoutMs: number,
+  opts: { allowNonZeroExit?: boolean } = {}
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     const proc = spawn("yt-dlp", args, {
       env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
@@ -58,11 +59,17 @@ function runYtdlp(
 
     proc.on("close", (code) => {
       clearTimeout(timer);
-      if (code !== 0) {
-        reject(new Error(`yt-dlp probe exit ${code}: ${stderr.slice(0, 300)}`));
+      const exitCode = code ?? 1;
+      const combined = `${stdout}\n${stderr}`;
+      if (opts.allowNonZeroExit && parseListSubsOutput(combined).length > 0) {
+        resolve({ stdout, stderr, code: exitCode });
         return;
       }
-      resolve({ stdout, stderr });
+      if (exitCode !== 0) {
+        reject(new Error(`yt-dlp probe exit ${exitCode}: ${stderr.slice(0, 300)}`));
+        return;
+      }
+      resolve({ stdout, stderr, code: exitCode });
     });
 
     proc.on("error", (err) => {
@@ -96,7 +103,9 @@ async function runListSubsProbe(
   playerClients: string
 ): Promise<string | null> {
   const args = [...baseArgs(playerClients), "--list-subs", url];
-  const { stdout, stderr } = await runYtdlp(args, videoId, PROBE_TIMEOUT_MS);
+  const { stdout, stderr } = await runYtdlp(args, videoId, PROBE_TIMEOUT_MS, {
+    allowNonZeroExit: true,
+  });
   const langs = parseListSubsOutput(`${stdout}\n${stderr}`);
   return pickEnglishLang(langs);
 }
@@ -169,7 +178,7 @@ export async function enrichVideosWithTranscriptAvailability<
 > {
   if (!videos.length) return [];
 
-  const concurrency = Math.min(Math.max(opts.concurrency ?? 2, 1), 4);
+  const concurrency = Math.min(Math.max(opts.concurrency ?? 1, 1), 2);
   const out: Array<
     T & { transcriptAvailable: boolean | null; transcriptLang: string | null }
   > = [];

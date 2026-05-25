@@ -405,37 +405,60 @@ export default function Page() {
       );
       if (!payload.length) return;
 
-      const BATCH = 4;
+      const BATCH = 3;
+      const PARALLEL = 3;
+      const PROBE_FETCH_MS = 90_000;
+      const batches: (typeof payload)[] = [];
+      for (let i = 0; i < payload.length; i += BATCH) {
+        batches.push(payload.slice(i, i + BATCH));
+      }
+
       setProbingTranscripts(true);
       setProbeProgress({ done: 0, total: payload.length });
 
-      const probeBatch = async (batch: typeof payload, attempt: number): Promise<boolean> => {
-        const res = await fetch("/api/pipeline/probe-transcripts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ videos: batch }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && Array.isArray(data.probes)) {
-          applyProbeResults(data.probes);
-          return true;
+      type ProbeBatch = typeof payload;
+      const probeBatch = async (batch: ProbeBatch, attempt: number): Promise<boolean> => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), PROBE_FETCH_MS);
+        try {
+          const res = await fetch("/api/pipeline/probe-transcripts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videos: batch }),
+            signal: controller.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && Array.isArray(data.probes)) {
+            applyProbeResults(data.probes);
+            return true;
+          }
+        } catch {
+          // retry below
+        } finally {
+          clearTimeout(timer);
         }
         if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
           return probeBatch(batch, attempt + 1);
         }
         return false;
       };
 
-      try {
-        for (let i = 0; i < payload.length; i += BATCH) {
-          const batch = payload.slice(i, i + BATCH);
+      let doneCount = 0;
+      let nextBatch = 0;
+
+      const worker = async () => {
+        while (nextBatch < batches.length) {
+          const batchIndex = nextBatch++;
+          const batch = batches[batchIndex];
           await probeBatch(batch, 0);
-          setProbeProgress({ done: Math.min(i + batch.length, payload.length), total: payload.length });
-          if (i + BATCH < payload.length) {
-            await new Promise((r) => setTimeout(r, 400));
-          }
+          doneCount += batch.length;
+          setProbeProgress({ done: Math.min(doneCount, payload.length), total: payload.length });
         }
+      };
+
+      try {
+        await Promise.all(Array.from({ length: Math.min(PARALLEL, batches.length) }, () => worker()));
       } finally {
         setProbingTranscripts(false);
         setProbeProgress({ done: payload.length, total: payload.length });

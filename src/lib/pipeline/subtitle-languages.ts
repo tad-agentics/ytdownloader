@@ -13,6 +13,8 @@ export function isEnglishSubtitleLang(lang: string): boolean {
 
 export function pickEnglishLang(langs: Iterable<string>): string | null {
   const list = Array.from(langs);
+  const exactEn = list.find((lang) => lang.toLowerCase() === "en");
+  if (exactEn) return exactEn;
   for (const pref of ENGLISH_LANG_PRIORITY) {
     const hit = list.find(
       (lang) =>

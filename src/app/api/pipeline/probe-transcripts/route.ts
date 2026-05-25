@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = (videos as ProbeInput[]).filter((v) => v?.videoId && v?.url).slice(0, MAX_PROBE_BATCH);
-    const enriched = await enrichVideosWithTranscriptAvailability(rows, { concurrency: 2 });
+    const enriched = await enrichVideosWithTranscriptAvailability(rows, { concurrency: 1 });
 
     return NextResponse.json({
       success: true,

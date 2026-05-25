@@ -77,7 +77,7 @@ gcloud run deploy "$SERVICE" \
   --memory=4Gi \
   --cpu=2 \
   --timeout=3600 \
-  --concurrency=1 \
+  --concurrency=4 \
   --min-instances=0 \
   --max-instances=3 \
   --allow-unauthenticated \

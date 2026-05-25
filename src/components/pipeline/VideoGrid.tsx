@@ -104,7 +104,7 @@ function VideoCard({
             {selected ? "✓" : ""}
           </span>
         )}
-        {selectable && v.transcriptAvailable === null && (
+        {selectable && v.transcriptAvailable === null && !transcriptCheckDone && (
           <span className="vtranscript-badge pending" title="Checking transcript availability">
             CC …
           </span>

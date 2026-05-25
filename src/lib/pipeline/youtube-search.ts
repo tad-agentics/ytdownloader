@@ -134,7 +134,8 @@ export async function searchYouTubeVideos(
       const vid = item.id?.videoId;
       if (!vid) return null;
       const d = dm[vid] || {};
-      const contentDetails = d.contentDetails as { duration?: string } | undefined;
+      const contentDetails = d.contentDetails as { duration?: string; caption?: string } | undefined;
+      const hasCaptions = String(contentDetails?.caption ?? "").toLowerCase() === "true";
       const statistics = d.statistics as { viewCount?: string } | undefined;
       const snippet = item.snippet as {
         title: string;
@@ -153,6 +154,8 @@ export async function searchYouTubeVideos(
         viewCount: parseInt(statistics?.viewCount || "0", 10),
         duration: iso,
         durationSeconds: parseDuration(iso),
+        transcriptAvailable: hasCaptions ? true : null,
+        transcriptLang: hasCaptions ? "en" : null,
       };
     })
     .filter((v): v is YouTubeVideo => v !== null)
