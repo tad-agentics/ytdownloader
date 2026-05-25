@@ -457,15 +457,17 @@ export default function Page() {
     ): Promise<{
       rows: Array<{ keyword: string; videos: YouTubeVideo[] }>;
       excludedNoCc: number;
+      probesFailed: number;
     }> => {
       const pickedRows: Array<{ keyword: string; videos: YouTubeVideo[] }> = [];
       let excludedNoCc = 0;
+      let probesFailed = 0;
       const totalPool = results.reduce((n, row) => n + row.videos.length, 0);
       let checked = 0;
       setProbeProgress({ done: 0, total: totalPool });
 
       const BATCH = 4;
-      const PARALLEL = 3;
+      const PARALLEL = 1;
 
       for (const row of results) {
         const keywordPicks: YouTubeVideo[] = [];
@@ -521,6 +523,8 @@ export default function Page() {
                 });
               } else if (probe.transcriptAvailable === false) {
                 excludedNoCc++;
+              } else {
+                probesFailed++;
               }
             }
             if (keywordPicks.length >= perKeyword) break;
@@ -534,7 +538,7 @@ export default function Page() {
 
       setLastSearchExcludedNoCc(excludedNoCc);
       setProbeProgress({ done: totalPool, total: totalPool });
-      return { rows: pickedRows, excludedNoCc };
+      return { rows: pickedRows, excludedNoCc, probesFailed };
     },
     []
   );
@@ -660,12 +664,15 @@ export default function Page() {
       let finalResults = results;
 
       if (englishCcOnly) {
-        const { rows: filtered, excludedNoCc } = await filterEnglishCcFromResults(results, maxResults);
+        const { rows: filtered, excludedNoCc, probesFailed } = await filterEnglishCcFromResults(
+          results,
+          maxResults
+        );
         finalResults = filtered;
         const found = finalResults.flatMap((row) => row.videos);
         if (!found.length) {
           window.alert(
-            `No videos with English CC found.${excludedNoCc > 0 ? ` ${excludedNoCc} candidates had no English captions.` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
+            `No videos with English CC found.${excludedNoCc > 0 ? ` ${excludedNoCc} candidates had no English captions.` : ""}${probesFailed > 0 ? ` ${probesFailed} could not be verified (YouTube rate limit).` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
           );
           setVideos([]);
           setPhase("input");

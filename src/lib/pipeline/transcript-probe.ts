@@ -159,8 +159,7 @@ export async function probeTranscriptAvailability(
       return { available: lang !== null, lang, checked: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`Fast transcript probe failed for ${videoId}: ${message}`);
-      return { available: false, lang: null, checked: false };
+      console.warn(`Fast transcript probe failed for ${videoId}, retrying full probe: ${message}`);
     }
   }
 
@@ -209,9 +208,14 @@ export async function enrichVideosWithTranscriptAvailability<
     while (index < videos.length) {
       const i = index++;
       const video = videos[i];
-      const probe = await probeTranscriptAvailability(video.url, video.videoId, {
+      let probe = await probeTranscriptAvailability(video.url, video.videoId, {
         fast: opts.fast,
       });
+      if (!probe.checked && opts.fast) {
+        probe = await probeTranscriptAvailability(video.url, video.videoId, {
+          fast: false,
+        });
+      }
       out[i] = {
         ...video,
         transcriptAvailable: probe.checked ? probe.available : null,
