@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { friendlyDownloadError } from "@/lib/pipeline/duration-limits";
+import { isUnplayableYouTubeTitle } from "@/lib/pipeline/text-utils";
 
 export interface VideoState {
   videoId: string;
@@ -61,6 +62,7 @@ function VideoCard({
   const uiStatus = v.status === "queued" ? "queued" : v.status;
   const hasTranscriptLink = v.transcriptStatus === "stored" && Boolean(v.transcriptUrl);
   const showMediaLinks = v.status === "done" && (v.r2PublicUrl || hasTranscriptLink);
+  const unplayableOnYouTube = isUnplayableYouTubeTitle(v.title);
 
   const handleCardClick = () => {
     if (selectable && onToggle) onToggle(v);
@@ -156,6 +158,11 @@ function VideoCard({
         </div>
         {selectable && v.keyword && (
           <div className="vkeyword-tag">{v.keyword}</div>
+        )}
+        {selectable && unplayableOnYouTube && (
+          <div className="vunplayable" title="YouTube cannot play this video (removed, private, or blocked).">
+            Not playable on YouTube — skip this result
+          </div>
         )}
         {v.status === "failed" && v.error && (
           <div className="verror" title={v.error}>

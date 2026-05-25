@@ -964,6 +964,14 @@ body {
   color: #991b1b;
 }
 
+.vunplayable {
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.35;
+  font-family: var(--m);
+  color: #854d0e;
+}
+
 .vprog-bar {
   height: 2px;
   background: #f0f0f0;

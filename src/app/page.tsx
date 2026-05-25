@@ -18,6 +18,7 @@ import {
   MAX_DURATION_OPTIONS,
 } from "@/lib/pipeline/duration-limits";
 import { resolveDownloadConcurrency } from "@/lib/pipeline/download-concurrency";
+import { decodeHtmlEntities } from "@/lib/pipeline/text-utils";
 
 const TERMINAL_JOB_STATUSES = ["done", "failed", "stopped"];
 
@@ -26,7 +27,7 @@ function mapSearchVideo(keyword: string, v: YouTubeVideo): VideoState {
     videoId: v.videoId,
     jobId: "",
     keyword,
-    title: v.title,
+    title: decodeHtmlEntities(v.title),
     channelName: v.channelName,
     views: v.viewCount,
     thumbnailUrl: v.thumbnailUrl || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,

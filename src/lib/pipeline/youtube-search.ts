@@ -1,3 +1,5 @@
+import { decodeHtmlEntities, isUnplayableYouTubeTitle } from "./text-utils";
+
 const BASE = "https://www.googleapis.com/youtube/v3";
 
 const REGION_LANGUAGE: Record<string, string> = {
@@ -124,7 +126,7 @@ export async function searchYouTubeVideos(
 
   const ids = items.map((i) => i.id?.videoId).filter(Boolean).join(",");
   const dr = await fetch(
-    `${BASE}/videos?${new URLSearchParams({ key, id: ids, part: "snippet,statistics,contentDetails" })}`
+    `${BASE}/videos?${new URLSearchParams({ key, id: ids, part: "snippet,statistics,contentDetails,status" })}`
   );
   const dm: Record<string, Record<string, unknown>> = {};
   for (const v of (await dr.json()).items || []) dm[v.id as string] = v;
@@ -137,16 +139,30 @@ export async function searchYouTubeVideos(
       const contentDetails = d.contentDetails as { duration?: string; caption?: string } | undefined;
       const hasCaptions = String(contentDetails?.caption ?? "").toLowerCase() === "true";
       const statistics = d.statistics as { viewCount?: string } | undefined;
+      const status = d.status as {
+        privacyStatus?: string;
+        embeddable?: boolean;
+        uploadStatus?: string;
+      } | undefined;
+      if (status?.embeddable === false) return null;
+      if (status?.privacyStatus && status.privacyStatus !== "public") return null;
+      if (status?.uploadStatus === "rejected" || status?.uploadStatus === "failed") return null;
+
       const snippet = item.snippet as {
         title: string;
         channelTitle: string;
         publishedAt: string;
         thumbnails?: { high?: { url?: string } };
       };
+      const title = decodeHtmlEntities(snippet.title || "");
+      if (!title || isUnplayableYouTubeTitle(title)) return null;
+
       const iso = contentDetails?.duration || "";
+      if (!parseDuration(iso)) return null;
+
       return {
         videoId: vid,
-        title: snippet.title,
+        title,
         url: `https://www.youtube.com/watch?v=${vid}`,
         channelName: snippet.channelTitle,
         publishedAt: snippet.publishedAt,
