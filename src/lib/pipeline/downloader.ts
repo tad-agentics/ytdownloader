@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 import { downloadTimeoutMs } from "./duration-limits";
 import { getYtdlpCookiesPath } from "./ytdlp-cookies";
+import { pickEnglishLang, subtitleLangs } from "./subtitle-languages";
 
 export type VideoQuality = "360p" | "480p" | "720p" | "1080p";
 
@@ -13,8 +14,6 @@ const FORMAT: Record<VideoQuality, string> = {
   "720p": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]",
   "1080p": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]",
 };
-
-const LANG_PRIORITY = ["en", "en-us", "en-gb", "vi", "vi-vn"];
 
 const PLAYER_CLIENTS = [
   "android_vr,tv,ios,android",
@@ -29,10 +28,6 @@ export interface DownloadResult {
   fileSizeMB: number;
   transcriptPath: string | null;
   transcriptLang: string | null;
-}
-
-function subtitleLangs(): string {
-  return process.env.SUBTITLE_LANGS?.trim() || "en,vi,en.*,vi.*";
 }
 
 function isBotBlockError(message: string): boolean {
@@ -50,20 +45,16 @@ function pickSubtitleFile(stemPath: string): { filePath: string; lang: string } 
     .map((name) => {
       const match = name.match(pattern);
       if (!match) return null;
-      return { filePath: path.join(dir, name), lang: match[1].toLowerCase() };
+      return { filePath: path.join(dir, name), lang: match[1] };
     })
     .filter((entry): entry is { filePath: string; lang: string } => entry !== null);
 
   if (!candidates.length) return null;
 
-  for (const pref of LANG_PRIORITY) {
-    const hit = candidates.find(
-      (c) => c.lang === pref || c.lang.startsWith(`${pref}-`) || c.lang.startsWith(pref)
-    );
-    if (hit) return hit;
-  }
+  const preferred = pickEnglishLang(candidates.map((c) => c.lang));
+  if (!preferred) return null;
 
-  return candidates[0];
+  return candidates.find((c) => c.lang.toLowerCase() === preferred.toLowerCase()) ?? null;
 }
 
 function runYtdlpOnce(

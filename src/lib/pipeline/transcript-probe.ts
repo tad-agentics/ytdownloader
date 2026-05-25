@@ -1,7 +1,6 @@
 import { spawn } from "child_process";
 import { getYtdlpCookiesPath } from "./ytdlp-cookies";
-
-const LANG_PRIORITY = ["en", "en-us", "en-gb", "vi", "vi-vn"];
+import { pickEnglishLang } from "./subtitle-languages";
 
 const PLAYER_CLIENTS = [
   "android_vr,tv,ios,android",
@@ -15,21 +14,11 @@ function pickLangFromTracks(
   subtitles: Record<string, unknown> | undefined,
   automaticCaptions: Record<string, unknown> | undefined
 ): string | null {
-  const langs = new Set([
+  const langs = [
     ...Object.keys(subtitles || {}),
     ...Object.keys(automaticCaptions || {}),
-  ]);
-
-  for (const pref of LANG_PRIORITY) {
-    for (const lang of Array.from(langs)) {
-      const lower = lang.toLowerCase();
-      if (lower === pref || lower.startsWith(`${pref}-`) || lower.startsWith(pref)) {
-        return lang;
-      }
-    }
-  }
-
-  return langs.size > 0 ? Array.from(langs)[0] : null;
+  ];
+  return pickEnglishLang(langs);
 }
 
 function isBotBlockError(message: string): boolean {

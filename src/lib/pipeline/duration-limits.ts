@@ -19,6 +19,9 @@ export function friendlyDownloadError(error: string | null | undefined): string 
     return "YouTube bot check — add YT_DLP cookies";
   }
   if (/timeout/i.test(error)) return "Download timed out";
+  if (/429|too many requests/i.test(error)) {
+    return "YouTube rate limit — try 1× parallel or retry later";
+  }
   if (/Private video|Video unavailable/i.test(error)) return "Video unavailable";
   const trimmed = error.replace(/^yt-dlp exit \d+:\s*/i, "").trim();
   return trimmed.length > 90 ? `${trimmed.slice(0, 87)}…` : trimmed;
