@@ -102,6 +102,11 @@ function VideoCard({
             {selected ? "✓" : ""}
           </span>
         )}
+        {selectable && v.transcriptAvailable === null && (
+          <span className="vtranscript-badge pending" title="Checking transcript availability">
+            CC …
+          </span>
+        )}
         {selectable && v.transcriptAvailable !== null && (
           <span
             className={`vtranscript-badge${v.transcriptAvailable ? " yes" : " no"}`}

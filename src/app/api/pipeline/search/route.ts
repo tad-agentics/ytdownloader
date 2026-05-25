@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchYouTubeVideos } from "@/lib/pipeline/youtube-search";
-import { enrichVideosWithTranscriptAvailability } from "@/lib/pipeline/transcript-probe";
+
+export const maxDuration = 120;
 
 const MAX_VIDEOS_PER_KEYWORD = 30;
 
@@ -30,16 +31,11 @@ export async function POST(req: NextRequest) {
         regionCode,
         maxDurationSeconds: parseInt(String(maxDurationSeconds), 10) || 0,
       });
-      const enriched = await enrichVideosWithTranscriptAvailability(videos);
-      return { keyword, videos: enriched };
+      return { keyword, videos };
     })
   );
 
   const totalFound = results.reduce((sum, row) => sum + row.videos.length, 0);
-  const withTranscripts = results.reduce(
-    (sum, row) => sum + row.videos.filter((v) => v.transcriptAvailable).length,
-    0
-  );
 
-  return NextResponse.json({ success: true, results, totalFound, withTranscripts });
+  return NextResponse.json({ success: true, results, totalFound });
 }

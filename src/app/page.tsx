@@ -141,6 +141,7 @@ export default function Page() {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [probingTranscripts, setProbingTranscripts] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
     []
   );
@@ -350,6 +351,70 @@ export default function Page() {
     });
   };
 
+  const probeTranscripts = useCallback(
+    async (results: Array<{ keyword: string; videos: YouTubeVideo[] }>) => {
+      const payload = results.flatMap((row) =>
+        row.videos.map((v) => ({
+          videoId: v.videoId,
+          url: v.url,
+          keyword: row.keyword,
+        }))
+      );
+      if (!payload.length) return;
+
+      setProbingTranscripts(true);
+      try {
+        const res = await fetch("/api/pipeline/probe-transcripts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ videos: payload }),
+        });
+        const data = await res.json();
+        if (!res.ok) return;
+
+        const probes = (data.probes || []) as Array<{
+          videoId: string;
+          keyword?: string;
+          transcriptAvailable: boolean;
+          transcriptLang: string | null;
+        }>;
+        const probeMap = new Map<string, (typeof probes)[number]>(
+          probes.map((p) => [`${p.keyword ?? ""}::${p.videoId}`, p])
+        );
+
+        setVideos((prev) =>
+          prev.map((v) => {
+            const p = probeMap.get(selectionKey(v));
+            if (!p) return v;
+            return {
+              ...v,
+              transcriptAvailable: p.transcriptAvailable,
+              transcriptLang: p.transcriptLang,
+            };
+          })
+        );
+
+        setSearchResults((prev) =>
+          prev.map((row) => ({
+            ...row,
+            videos: row.videos.map((v) => {
+              const p = probeMap.get(`${row.keyword}::${v.videoId}`);
+              if (!p) return v;
+              return {
+                ...v,
+                transcriptAvailable: p.transcriptAvailable,
+                transcriptLang: p.transcriptLang,
+              };
+            }),
+          }))
+        );
+      } finally {
+        setProbingTranscripts(false);
+      }
+    },
+    []
+  );
+
   const handleSearch = async () => {
     if (runRef.current || keywords.length === 0) return;
     runRef.current = true;
@@ -367,16 +432,26 @@ export default function Page() {
       });
       const data = await res.json();
       if (!res.ok) {
+        window.alert(typeof data.error === "string" ? data.error : "Search failed");
         setPhase("input");
         return;
       }
 
       const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
+      const found = results.flatMap((row) => row.videos);
+
+      if (!found.length) {
+        window.alert("No videos found for these keywords. Try different keywords or relax the max length filter.");
+        setPhase("input");
+        return;
+      }
+
       setSearchResults(results);
       const mapped = results.flatMap((row) => row.videos.map((v) => mapSearchVideo(row.keyword, v)));
       setVideos(mapped);
       setSelectedKeys(new Set(mapped.map((v) => selectionKey(v))));
-      setPhase(mapped.length ? "selecting" : "input");
+      setPhase("selecting");
+      void probeTranscripts(results);
     } finally {
       runRef.current = false;
     }
@@ -525,7 +600,7 @@ export default function Page() {
               <div className="search-state">
                 <div className="spinner" />
                 <span>
-                  Searching YouTube and checking transcripts for {keywords.length} keyword
+                  Searching YouTube for {keywords.length} keyword
                   {keywords.length > 1 ? "s" : ""}…
                 </span>
                 <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
@@ -541,6 +616,7 @@ export default function Page() {
                   <span className="vgrid-meta">
                     {selectedKeys.size} of {total} selected
                     {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
+                    {probingTranscripts ? " · checking transcripts…" : ""}
                   </span>
                 </div>
                 <div className="select-toolbar">

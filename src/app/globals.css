@@ -489,6 +489,12 @@ body {
   border: 1px solid #fca5a5;
 }
 
+.vtranscript-badge.pending {
+  background: #f1f5f9;
+  color: var(--tx3);
+  border: 1px solid var(--bdr);
+}
+
 .vcard.selectable {
   cursor: pointer;
 }

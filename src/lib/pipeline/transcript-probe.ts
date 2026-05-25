@@ -9,8 +9,7 @@ const PLAYER_CLIENTS = [
   "web_embedded",
 ];
 
-const PROBE_TIMEOUT_MS = 45_000;
-const PROBE_CONCURRENCY = 3;
+const PROBE_TIMEOUT_MS = 20_000;
 
 function pickLangFromTracks(
   subtitles: Record<string, unknown> | undefined,
@@ -33,12 +32,19 @@ function pickLangFromTracks(
   return langs.size > 0 ? Array.from(langs)[0] : null;
 }
 
+function isBotBlockError(message: string): boolean {
+  return /not a bot|Sign in to confirm|bot check|HTTP Error 403/i.test(message);
+}
+
 function runProbeOnce(url: string, videoId: string, playerClients: string): Promise<string | null> {
   const args = [
     "--dump-json",
     "--skip-download",
     "--no-warnings",
     "--quiet",
+    "--no-playlist",
+    "--socket-timeout",
+    "15",
     "--extractor-args",
     `youtube:player_client=${playerClients}`,
     "--user-agent",
@@ -108,6 +114,9 @@ export async function probeTranscriptAvailability(
       return { available: lang !== null, lang };
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : String(err);
+      if (!isBotBlockError(lastError)) {
+        break;
+      }
     }
   }
 
@@ -117,9 +126,13 @@ export async function probeTranscriptAvailability(
 
 export async function enrichVideosWithTranscriptAvailability<
   T extends { videoId: string; url: string },
->(videos: T[]): Promise<Array<T & { transcriptAvailable: boolean; transcriptLang: string | null }>> {
+>(
+  videos: T[],
+  opts: { concurrency?: number } = {}
+): Promise<Array<T & { transcriptAvailable: boolean; transcriptLang: string | null }>> {
   if (!videos.length) return [];
 
+  const concurrency = Math.min(Math.max(opts.concurrency ?? 6, 1), 12);
   const out: Array<T & { transcriptAvailable: boolean; transcriptLang: string | null }> = [];
   let index = 0;
 
@@ -136,8 +149,7 @@ export async function enrichVideosWithTranscriptAvailability<
     }
   }
 
-  const workers = Math.min(PROBE_CONCURRENCY, videos.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(concurrency, videos.length) }, () => worker()));
 
   return out;
 }
