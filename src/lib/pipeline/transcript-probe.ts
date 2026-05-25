@@ -4,8 +4,9 @@ import { pickEnglishLang } from "./subtitle-languages";
 
 const PLAYER_CLIENTS = ["android_vr,tv,ios,android", "mweb,web_safari,web"];
 
-const PROBE_TIMEOUT_MS = 10_000;
-const MAX_PROBE_BATCH = 12;
+const PROBE_TIMEOUT_MS = 8_000;
+const FAST_PROBE_TIMEOUT_MS = 6_000;
+const MAX_PROBE_BATCH = 4;
 
 function pickLangFromTracks(
   subtitles: Record<string, unknown> | undefined,
@@ -100,10 +101,11 @@ function baseArgs(playerClients: string): string[] {
 async function runListSubsProbe(
   url: string,
   videoId: string,
-  playerClients: string
+  playerClients: string,
+  timeoutMs = PROBE_TIMEOUT_MS
 ): Promise<string | null> {
   const args = [...baseArgs(playerClients), "--list-subs", url];
-  const { stdout, stderr } = await runYtdlp(args, videoId, PROBE_TIMEOUT_MS, {
+  const { stdout, stderr } = await runYtdlp(args, videoId, timeoutMs, {
     allowNonZeroExit: true,
   });
   const langs = parseListSubsOutput(`${stdout}\n${stderr}`);
@@ -141,8 +143,20 @@ function sleep(ms: number) {
 
 export async function probeTranscriptAvailability(
   url: string,
-  videoId: string
+  videoId: string,
+  opts: { fast?: boolean } = {}
 ): Promise<{ available: boolean; lang: string | null; checked: boolean }> {
+  if (opts.fast) {
+    try {
+      const lang = await runListSubsProbe(url, videoId, PLAYER_CLIENTS[0], FAST_PROBE_TIMEOUT_MS);
+      return { available: lang !== null, lang, checked: true };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`Fast transcript probe failed for ${videoId}: ${message}`);
+      return { available: false, lang: null, checked: false };
+    }
+  }
+
   let lastError = "probe failed";
 
   for (let attempt = 0; attempt <= PROBE_RETRIES; attempt++) {
@@ -167,7 +181,7 @@ export async function enrichVideosWithTranscriptAvailability<
   T extends { videoId: string; url: string },
 >(
   videos: T[],
-  opts: { concurrency?: number } = {}
+  opts: { concurrency?: number; fast?: boolean } = {}
 ): Promise<
   Array<
     T & {
@@ -188,7 +202,9 @@ export async function enrichVideosWithTranscriptAvailability<
     while (index < videos.length) {
       const i = index++;
       const video = videos[i];
-      const probe = await probeTranscriptAvailability(video.url, video.videoId);
+      const probe = await probeTranscriptAvailability(video.url, video.videoId, {
+        fast: opts.fast,
+      });
       out[i] = {
         ...video,
         transcriptAvailable: probe.checked ? probe.available : null,

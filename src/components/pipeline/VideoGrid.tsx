@@ -45,6 +45,7 @@ function VideoCard({
   selectable,
   selected,
   onToggle,
+  isTranscriptProbing,
 }: {
   v: VideoState;
   deletable?: boolean;
@@ -53,6 +54,7 @@ function VideoCard({
   selectable?: boolean;
   selected?: boolean;
   onToggle?: (v: VideoState) => void;
+  isTranscriptProbing?: boolean;
 }) {
   const colors = ["#dbeafe", "#fce7f3", "#dcfce7", "#fef9c3", "#ede9fe", "#ffedd5"];
   const bg = colors[Math.abs(v.videoId.charCodeAt(0)) % colors.length];
@@ -102,6 +104,11 @@ function VideoCard({
             {selected ? "✓" : ""}
           </span>
         )}
+        {selectable && v.transcriptAvailable === null && isTranscriptProbing && (
+          <span className="vtranscript-badge pending" title="Checking English CC">
+            CC …
+          </span>
+        )}
         {selectable && v.transcriptAvailable === true && (
           <span
             className="vtranscript-badge yes"
@@ -115,10 +122,10 @@ function VideoCard({
             CC ✗
           </span>
         )}
-        {selectable && v.transcriptAvailable === null && (
+        {selectable && v.transcriptAvailable === null && !isTranscriptProbing && (
           <span
             className="vtranscript-badge unknown"
-            title="Could not verify English CC. Download may still include a transcript."
+            title="CC not verified yet. Badge updates when the check finishes."
           >
             CC ?
           </span>
@@ -211,6 +218,7 @@ interface VideoGridProps {
   selectable?: boolean;
   selectedKeys?: Set<string>;
   onToggle?: (video: VideoState) => void;
+  probingKeys?: Set<string>;
 }
 
 export default function VideoGrid({
@@ -221,6 +229,7 @@ export default function VideoGrid({
   selectable,
   selectedKeys,
   onToggle,
+  probingKeys,
 }: VideoGridProps) {
   return (
     <div className="vgrid">
@@ -234,6 +243,7 @@ export default function VideoGrid({
           selectable={selectable}
           selected={selectedKeys?.has(selectionKey(v))}
           onToggle={onToggle}
+          isTranscriptProbing={probingKeys?.has(selectionKey(v))}
         />
       ))}
     </div>

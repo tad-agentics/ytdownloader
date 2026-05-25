@@ -142,7 +142,8 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<VideoState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [lastSearchExcluded, setLastSearchExcluded] = useState(0);
-  const [lastSearchWithTranscript, setLastSearchWithTranscript] = useState(0);
+  const [probingKeys, setProbingKeys] = useState<Set<string>>(new Set());
+  const [probeProgress, setProbeProgress] = useState({ done: 0, total: 0 });
   const [searchResults, setSearchResults] = useState<Array<{ keyword: string; videos: YouTubeVideo[] }>>(
     []
   );
@@ -352,6 +353,114 @@ export default function Page() {
     });
   };
 
+  const applyProbeResults = useCallback(
+    (
+      probes: Array<{
+        videoId: string;
+        keyword?: string;
+        transcriptAvailable: boolean | null;
+        transcriptLang: string | null;
+      }>
+    ) => {
+      const probeMap = new Map(probes.map((p) => [`${p.keyword ?? ""}::${p.videoId}`, p]));
+
+      setVideos((prev) =>
+        prev.map((v) => {
+          const p = probeMap.get(selectionKey(v));
+          if (!p) return v;
+          return {
+            ...v,
+            transcriptAvailable: p.transcriptAvailable,
+            transcriptLang: p.transcriptLang,
+          };
+        })
+      );
+
+      setSearchResults((prev) =>
+        prev.map((row) => ({
+          ...row,
+          videos: row.videos.map((v) => {
+            const p = probeMap.get(`${row.keyword}::${v.videoId}`);
+            if (!p) return v;
+            return {
+              ...v,
+              transcriptAvailable: p.transcriptAvailable,
+              transcriptLang: p.transcriptLang,
+            };
+          }),
+        }))
+      );
+    },
+    []
+  );
+
+  const probeTranscripts = useCallback(
+    async (results: Array<{ keyword: string; videos: YouTubeVideo[] }>) => {
+      const payload = results.flatMap((row) =>
+        row.videos
+          .filter((v) => v.transcriptAvailable !== true)
+          .map((v) => ({
+            videoId: v.videoId,
+            url: v.url,
+            keyword: row.keyword,
+          }))
+      );
+      if (!payload.length) return;
+
+      const BATCH = 4;
+      const PROBE_FETCH_MS = 45_000;
+      const keys = payload.map((v) => `${v.keyword}::${v.videoId}`);
+      setProbingKeys(new Set(keys));
+      setProbeProgress({ done: 0, total: keys.length });
+
+      const probeBatch = async (batch: typeof payload, attempt: number): Promise<boolean> => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), PROBE_FETCH_MS);
+        try {
+          const res = await fetch("/api/pipeline/probe-transcripts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videos: batch }),
+            signal: controller.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && Array.isArray(data.probes)) {
+            applyProbeResults(data.probes);
+            return true;
+          }
+        } catch {
+          // retry below
+        } finally {
+          clearTimeout(timer);
+        }
+        if (attempt < 1) {
+          await new Promise((r) => setTimeout(r, 800));
+          return probeBatch(batch, attempt + 1);
+        }
+        return false;
+      };
+
+      let doneCount = 0;
+      try {
+        for (let i = 0; i < payload.length; i += BATCH) {
+          const batch = payload.slice(i, i + BATCH);
+          await probeBatch(batch, 0);
+          doneCount += batch.length;
+          setProbeProgress({ done: Math.min(doneCount, payload.length), total: payload.length });
+          setProbingKeys((prev) => {
+            const next = new Set(prev);
+            for (const v of batch) next.delete(`${v.keyword}::${v.videoId}`);
+            return next;
+          });
+        }
+      } finally {
+        setProbingKeys(new Set());
+        setProbeProgress({ done: payload.length, total: payload.length });
+      }
+    },
+    [applyProbeResults]
+  );
+
   const handleSearch = async () => {
     if (runRef.current || keywords.length === 0) return;
     runRef.current = true;
@@ -360,7 +469,8 @@ export default function Page() {
     setSearchResults([]);
     setSelectedKeys(new Set());
     setLastSearchExcluded(0);
-    setLastSearchWithTranscript(0);
+    setProbingKeys(new Set());
+    setProbeProgress({ done: 0, total: 0 });
     setPhase("searching");
 
     try {
@@ -378,9 +488,7 @@ export default function Page() {
 
       const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
       const totalExcluded = Number(data.totalExcluded ?? 0);
-      const withTranscript = Number(data.withTranscript ?? 0);
       setLastSearchExcluded(totalExcluded);
-      setLastSearchWithTranscript(withTranscript);
       const found = results.flatMap((row) => row.videos);
 
       if (!found.length) {
@@ -402,6 +510,7 @@ export default function Page() {
       setVideos(mapped);
       setSelectedKeys(new Set(mapped.map((v) => selectionKey(v))));
       setPhase("selecting");
+      void probeTranscripts(results);
     } finally {
       runRef.current = false;
     }
@@ -550,11 +659,11 @@ export default function Page() {
               <div className="search-state">
                 <div className="spinner" />
                 <span>
-                  Searching YouTube and checking English CC for {keywords.length} keyword
-                  {keywords.length > 1 ? "s" : ""}… (may take 1–3 min)
+                  Searching YouTube for {keywords.length} keyword
+                  {keywords.length > 1 ? "s" : ""}…
                 </span>
                 <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
-                  youtube.com/v3/search · yt-dlp · region={regionCode}
+                  youtube.com/v3/search · region={regionCode}
                 </span>
               </div>
             )}
@@ -566,11 +675,10 @@ export default function Page() {
                   <span className="vgrid-meta">
                     {selectedKeys.size} of {total} selected
                     {lastSearchExcluded > 0 ? ` · ${lastSearchExcluded} already stored (hidden)` : ""}
-                    {lastSearchWithTranscript > 0
-                      ? ` · ${lastSearchWithTranscript} with CC ✓`
-                      : pickWithTranscript > 0
-                        ? ` · ${pickWithTranscript} with CC ✓`
-                        : ""}
+                    {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
+                    {probingKeys.size > 0
+                      ? ` · checking CC ${probeProgress.done}/${probeProgress.total}`
+                      : ""}
                   </span>
                 </div>
                 <div className="select-toolbar">
@@ -599,12 +707,14 @@ export default function Page() {
                   </button>
                 </div>
                 <div className="select-legend">
+                  <span className="vtranscript-badge pending inline">CC …</span> checking
                   <span className="vtranscript-badge yes inline">CC ✓</span> English CC found
                   <span className="vtranscript-badge no inline">CC ✗</span> no English CC
                   <span className="vtranscript-badge unknown inline">CC ?</span> could not verify
                 </div>
                 <VideoGrid
                   videos={videos}
+                  probingKeys={probingKeys}
                   selectable
                   selectedKeys={selectedKeys}
                   onToggle={toggleVideoSelection}
