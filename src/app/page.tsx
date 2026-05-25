@@ -46,6 +46,59 @@ function mapSearchVideo(keyword: string, v: YouTubeVideo): VideoState {
   };
 }
 
+async function fetchProbeBatch(
+  batch: Array<{ videoId: string; url: string; keyword: string }>,
+  attempt = 0
+): Promise<
+  Array<{
+    videoId: string;
+    keyword: string;
+    transcriptAvailable: boolean | null;
+    transcriptLang: string | null;
+  }>
+> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 35_000);
+  try {
+    const res = await fetch("/api/pipeline/probe-transcripts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videos: batch }),
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && Array.isArray(data.probes)) {
+      return data.probes.map(
+        (p: {
+          videoId: string;
+          keyword?: string;
+          transcriptAvailable: boolean | null;
+          transcriptLang: string | null;
+        }) => ({
+          videoId: p.videoId,
+          keyword: p.keyword ?? batch[0]?.keyword ?? "",
+          transcriptAvailable: p.transcriptAvailable,
+          transcriptLang: p.transcriptLang,
+        })
+      );
+    }
+  } catch {
+    // retry below
+  } finally {
+    clearTimeout(timer);
+  }
+  if (attempt < 1) {
+    await new Promise((r) => setTimeout(r, 600));
+    return fetchProbeBatch(batch, attempt + 1);
+  }
+  return batch.map((v) => ({
+    videoId: v.videoId,
+    keyword: v.keyword,
+    transcriptAvailable: null,
+    transcriptLang: null,
+  }));
+}
+
 function mapDbVideo(v: PipelineVideo): VideoState {
   const statusMap: Record<string, VideoState["status"]> = {
     pending: "queued",
@@ -397,6 +450,95 @@ export default function Page() {
     []
   );
 
+  const filterEnglishCcFromResults = useCallback(
+    async (
+      results: Array<{ keyword: string; videos: YouTubeVideo[] }>,
+      perKeyword: number
+    ): Promise<{
+      rows: Array<{ keyword: string; videos: YouTubeVideo[] }>;
+      excludedNoCc: number;
+    }> => {
+      const pickedRows: Array<{ keyword: string; videos: YouTubeVideo[] }> = [];
+      let excludedNoCc = 0;
+      const totalPool = results.reduce((n, row) => n + row.videos.length, 0);
+      let checked = 0;
+      setProbeProgress({ done: 0, total: totalPool });
+
+      const BATCH = 4;
+      const PARALLEL = 3;
+
+      for (const row of results) {
+        const keywordPicks: YouTubeVideo[] = [];
+        const pool = row.videos;
+
+        for (let i = 0; i < pool.length && keywordPicks.length < perKeyword; i += BATCH * PARALLEL) {
+          const jobs: Promise<
+            Array<{
+              videoId: string;
+              keyword: string;
+              transcriptAvailable: boolean | null;
+              transcriptLang: string | null;
+            }>
+          >[] = [];
+
+          for (let slot = 0; slot < PARALLEL; slot++) {
+            const start = i + slot * BATCH;
+            const batchVideos = pool.slice(start, start + BATCH);
+            if (!batchVideos.length) continue;
+            jobs.push(
+              fetchProbeBatch(
+                batchVideos.map((v) => ({
+                  videoId: v.videoId,
+                  url: v.url,
+                  keyword: row.keyword,
+                }))
+              )
+            );
+          }
+
+          const probeGroups = await Promise.all(jobs);
+          for (const probes of probeGroups) {
+            for (const probe of probes) {
+              if (keywordPicks.length >= perKeyword) break;
+              checked++;
+              setProbeProgress({ done: checked, total: totalPool });
+              const source = pool.find((v) => v.videoId === probe.videoId);
+              if (!source) continue;
+
+              if (probe.transcriptAvailable === true) {
+                const picked: YouTubeVideo = {
+                  ...source,
+                  transcriptAvailable: true,
+                  transcriptLang: probe.transcriptLang,
+                };
+                keywordPicks.push(picked);
+                const mapped = mapSearchVideo(row.keyword, picked);
+                setVideos((prev) => [...prev, mapped]);
+                setSelectedKeys((prev) => {
+                  const next = new Set(prev);
+                  next.add(selectionKey(mapped));
+                  return next;
+                });
+              } else if (probe.transcriptAvailable === false) {
+                excludedNoCc++;
+              }
+            }
+            if (keywordPicks.length >= perKeyword) break;
+          }
+        }
+
+        if (keywordPicks.length) {
+          pickedRows.push({ keyword: row.keyword, videos: keywordPicks });
+        }
+      }
+
+      setLastSearchExcludedNoCc(excludedNoCc);
+      setProbeProgress({ done: totalPool, total: totalPool });
+      return { rows: pickedRows, excludedNoCc };
+    },
+    []
+  );
+
   const probeTranscripts = useCallback(
     async (results: Array<{ keyword: string; videos: YouTubeVideo[] }>) => {
       const payload = results.flatMap((row) =>
@@ -498,20 +640,13 @@ export default function Page() {
 
       const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
       const totalExcluded = Number(data.totalExcluded ?? 0);
-      const totalExcludedNoCc = Number(data.totalExcludedNoCc ?? 0);
-      const totalProbesFailed = Number(data.totalProbesFailed ?? 0);
       setLastSearchExcluded(totalExcluded);
-      setLastSearchExcludedNoCc(totalExcludedNoCc);
-      const found = results.flatMap((row) => row.videos);
 
-      if (!found.length) {
-        if (totalExcluded > 0 && !englishCcOnly) {
+      const poolCount = results.reduce((n, row) => n + row.videos.length, 0);
+      if (!poolCount) {
+        if (totalExcluded > 0) {
           window.alert(
             `All ${totalExcluded} result${totalExcluded > 1 ? "s" : ""} from this search are already in your library. Try different keywords or increase videos per keyword.`
-          );
-        } else if (englishCcOnly && (totalExcluded > 0 || totalExcludedNoCc > 0 || totalProbesFailed > 0)) {
-          window.alert(
-            `No videos with English CC found.${totalExcludedNoCc > 0 ? ` ${totalExcludedNoCc} had no English captions.` : ""}${totalProbesFailed > 0 ? ` ${totalProbesFailed} could not be verified (YouTube rate limit).` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
           );
         } else {
           window.alert(
@@ -522,12 +657,32 @@ export default function Page() {
         return;
       }
 
-      setSearchResults(results);
-      const mapped = results.flatMap((row) => row.videos.map((v) => mapSearchVideo(row.keyword, v)));
-      setVideos(mapped);
-      setSelectedKeys(new Set(mapped.map((v) => selectionKey(v))));
+      let finalResults = results;
+
+      if (englishCcOnly) {
+        const { rows: filtered, excludedNoCc } = await filterEnglishCcFromResults(results, maxResults);
+        finalResults = filtered;
+        const found = finalResults.flatMap((row) => row.videos);
+        if (!found.length) {
+          window.alert(
+            `No videos with English CC found.${excludedNoCc > 0 ? ` ${excludedNoCc} candidates had no English captions.` : ""}${totalExcluded > 0 ? ` ${totalExcluded} already in your library.` : ""} Try different keywords, turn off "English CC only", or increase videos per keyword.`
+          );
+          setVideos([]);
+          setPhase("input");
+          return;
+        }
+      } else {
+        setSearchResults(results);
+        const mapped = results.flatMap((row) => row.videos.map((v) => mapSearchVideo(row.keyword, v)));
+        setVideos(mapped);
+        setSelectedKeys(new Set(mapped.map((v) => selectionKey(v))));
+        setPhase("selecting");
+        void probeTranscripts(results);
+        return;
+      }
+
+      setSearchResults(finalResults);
       setPhase("selecting");
-      if (!englishCcOnly) void probeTranscripts(results);
     } finally {
       runRef.current = false;
     }
@@ -574,7 +729,8 @@ export default function Page() {
   };
 
   const isRunning = phase === "searching" || phase === "processing";
-  const showSelection = phase === "selecting" && videos.length > 0;
+  const showSelection =
+    videos.length > 0 && (phase === "selecting" || (phase === "searching" && englishCcOnly));
   const showActiveRun = videos.length > 0 && ["processing", "done", "stopped"].includes(phase);
   const historyToShow = historyVideos.filter(
     (h) => !showActiveRun || !videos.some((v) => v.videoId === h.videoId && v.jobId === h.jobId)
@@ -674,17 +830,19 @@ export default function Page() {
               selectedCount={selectedKeys.size}
             />
 
-            {phase === "searching" && (
+            {phase === "searching" && videos.length === 0 && (
               <div className="search-state">
                 <div className="spinner" />
                 <span>
-                  {englishCcOnly
-                    ? `Searching YouTube for English CC videos (${keywords.length} keyword${keywords.length > 1 ? "s" : ""})…`
-                    : `Searching YouTube for ${keywords.length} keyword${keywords.length > 1 ? "s" : ""}…`}
+                  {probeProgress.total > 0
+                    ? `Checking English CC ${probeProgress.done}/${probeProgress.total}…`
+                    : englishCcOnly
+                      ? `Searching YouTube (${keywords.length} keyword${keywords.length > 1 ? "s" : ""})…`
+                      : `Searching YouTube for ${keywords.length} keyword${keywords.length > 1 ? "s" : ""}…`}
                 </span>
                 <span style={{ fontSize: 11, color: "var(--tx3)", fontFamily: "var(--m)" }}>
                   youtube.com/v3/search
-                  {englishCcOnly ? " · captions + yt-dlp" : ""} · region={regionCode}
+                  {probeProgress.total > 0 ? " · yt-dlp CC probe" : ""} · region={regionCode}
                 </span>
               </div>
             )}
@@ -698,7 +856,7 @@ export default function Page() {
                     {lastSearchExcluded > 0 ? ` · ${lastSearchExcluded} already stored (hidden)` : ""}
                     {lastSearchExcludedNoCc > 0 ? ` · ${lastSearchExcludedNoCc} no English CC (hidden)` : ""}
                     {pickWithTranscript > 0 ? ` · ${pickWithTranscript} with CC ✓` : ""}
-                    {probingKeys.size > 0
+                    {probingKeys.size > 0 || (probeProgress.total > 0 && probeProgress.done < probeProgress.total)
                       ? ` · checking CC ${probeProgress.done}/${probeProgress.total}`
                       : ""}
                   </span>
