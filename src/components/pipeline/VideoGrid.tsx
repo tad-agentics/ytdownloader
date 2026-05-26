@@ -190,7 +190,13 @@ function VideoCard({
                 className="vmedia-btn transcript"
                 onClick={(e) => e.stopPropagation()}
               >
-                Transcript{v.transcriptLang ? ` · ${v.transcriptLang}` : ""} ↗
+                Transcript
+                {v.transcriptLang?.toLowerCase() === "en-orig"
+                  ? " · English (auto-generated)"
+                  : v.transcriptLang
+                    ? ` · ${v.transcriptLang}`
+                    : ""}{" "}
+                ↗
               </a>
             ) : v.transcriptStatus === "missing" ? (
               <span className="vmedia-muted">No transcript</span>

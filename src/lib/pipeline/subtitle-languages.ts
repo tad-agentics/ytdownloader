@@ -26,3 +26,11 @@ export function pickEnglishLang(langs: Iterable<string>): string | null {
   }
   return list.find((lang) => isEnglishSubtitleLang(lang)) ?? null;
 }
+
+/** Prefer en-orig (YouTube “English auto-generated”) when downloading subtitles. */
+export function pickEnglishDownloadLang(langs: Iterable<string>): string | null {
+  const list = Array.from(langs);
+  const enOrig = list.find((lang) => lang.toLowerCase() === "en-orig");
+  if (enOrig) return enOrig;
+  return pickEnglishLang(langs);
+}

@@ -111,7 +111,7 @@ export async function uploadTranscriptToR2(
 ): Promise<{ r2Key: string; publicUrl: string; fileSizeBytes: number }> {
   const slug = keywordSlug(keyword);
   const safeLang = lang.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 16) || "und";
-  const r2Key = `${slug}/${videoId}_${Date.now()}.${safeLang}.srt`;
+  const r2Key = `${slug}/${videoId}_${Date.now()}.${safeLang}.youtube.txt`;
   const fileSizeBytes = fs.statSync(filePath).size;
 
   await new Upload({
@@ -126,7 +126,7 @@ export async function uploadTranscriptToR2(
         keyword,
         videoId,
         lang: safeLang,
-        type: "transcript",
+        type: "youtube-transcript",
         pipeline: "ytdownloader-v1",
         uploadedAt: new Date().toISOString(),
         ...metadata,
