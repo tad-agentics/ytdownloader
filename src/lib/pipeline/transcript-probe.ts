@@ -122,11 +122,20 @@ async function runDumpJsonProbe(
   timeoutMs = PROBE_TIMEOUT_MS
 ): Promise<string | null> {
   const args = [...baseArgs(playerClients), "--dump-json", url];
-  const { stdout } = await runYtdlp(args, videoId, timeoutMs);
+  const { stdout, stderr } = await runYtdlp(args, videoId, timeoutMs);
   const data = JSON.parse(stdout) as {
     subtitles?: Record<string, unknown>;
     automatic_captions?: Record<string, unknown>;
   };
+  const subtitleKeys = Object.keys(data.subtitles || {});
+  const automaticKeys = Object.keys(data.automatic_captions || {});
+  if (subtitleKeys.length === 0 && automaticKeys.length === 0) {
+    const detail = `${stderr}`.slice(0, 200);
+    if (isBotBlockError(detail)) {
+      throw new Error(detail || `bot block for ${videoId}`);
+    }
+    throw new Error(`empty caption tracks for ${videoId}`);
+  }
   return pickLangFromTracks(data.subtitles, data.automatic_captions);
 }
 

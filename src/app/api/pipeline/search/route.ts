@@ -6,6 +6,12 @@ export const maxDuration = 120;
 
 const MAX_VIDEOS_PER_KEYWORD = 30;
 
+function parseMaxDurationSeconds(value: unknown, fallback = 1200): number {
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
 export async function POST(req: NextRequest) {
   const {
     keywords,
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
       const raw = await searchYouTubeVideos(keyword, {
         maxResults: fetchPool,
         regionCode,
-        maxDurationSeconds: parseInt(String(maxDurationSeconds), 10) || 0,
+        maxDurationSeconds: parseMaxDurationSeconds(maxDurationSeconds),
         requireCaptions: false,
       });
 

@@ -102,7 +102,9 @@ export async function searchYouTubeVideos(
         ? "medium"
         : "any");
   const fetchCount =
-    durationFilter > 0 ? Math.min(Math.max(maxResults * 3, maxResults), 50) : maxResults;
+    durationFilter > 0
+      ? Math.min(Math.max(maxResults * 3, maxResults), 50)
+      : Math.min(Math.max(maxResults * 2, maxResults), 50);
   const key = getApiKey();
 
   const sp = new URLSearchParams({
