@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const storedIds = excludeStored !== false ? await listStoredVideoIds() : new Set<string>();
   const ccOnly = Boolean(englishCcOnly);
   const fetchPool = ccOnly
-    ? Math.min(Math.max(cappedMax * 4, cappedMax + 8), MAX_VIDEOS_PER_KEYWORD)
+    ? Math.min(Math.max(cappedMax * 2, cappedMax + 4), 20)
     : excludeStored
       ? Math.min(Math.max(cappedMax * 4, cappedMax + 4), MAX_VIDEOS_PER_KEYWORD)
       : cappedMax;

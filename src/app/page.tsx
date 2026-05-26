@@ -463,8 +463,12 @@ export default function Page() {
       let excludedNoCc = 0;
       let probesFailed = 0;
       const totalPool = results.reduce((n, row) => n + row.videos.length, 0);
+      const maxProbeCandidates = results.reduce(
+        (n, row) => n + Math.min(row.videos.length, Math.max(perKeyword * 5, 8)),
+        0
+      );
       let checked = 0;
-      setProbeProgress({ done: 0, total: totalPool });
+      setProbeProgress({ done: 0, total: maxProbeCandidates });
 
       const BATCH = 4;
       const PARALLEL = 1;
@@ -497,9 +501,12 @@ export default function Page() {
           if (source.transcriptAvailable === true) addPick(source);
         }
 
-        const toProbe = pool.filter((v) => !keywordPicks.some((p) => p.videoId === v.videoId));
+        const toProbeAll = pool.filter((v) => !keywordPicks.some((p) => p.videoId === v.videoId));
+        const maxProbeCandidates = Math.min(toProbeAll.length, Math.max(perKeyword * 5, 8));
+        const toProbe = toProbeAll.slice(0, maxProbeCandidates);
 
-        for (let i = 0; i < toProbe.length && keywordPicks.length < perKeyword; i += BATCH * PARALLEL) {
+        probeLoop: for (let i = 0; i < toProbe.length; i += BATCH * PARALLEL) {
+          if (keywordPicks.length >= perKeyword) break probeLoop;
           const jobs: Promise<
             Array<{
               videoId: string;
@@ -544,11 +551,12 @@ export default function Page() {
                 probesFailed++;
               }
             }
-            if (keywordPicks.length >= perKeyword) break;
+            if (keywordPicks.length >= perKeyword) break probeLoop;
           }
 
-          if (i + BATCH * PARALLEL < toProbe.length && keywordPicks.length < perKeyword) {
-            await new Promise((r) => setTimeout(r, 1500));
+          if (keywordPicks.length >= perKeyword) break probeLoop;
+          if (i + BATCH * PARALLEL < toProbe.length) {
+            await new Promise((r) => setTimeout(r, 500));
           }
         }
 
@@ -558,7 +566,7 @@ export default function Page() {
       }
 
       setLastSearchExcludedNoCc(excludedNoCc);
-      setProbeProgress({ done: totalPool, total: totalPool });
+      setProbeProgress({ done: maxProbeCandidates, total: maxProbeCandidates });
       return { rows: pickedRows, excludedNoCc, probesFailed };
     },
     []
@@ -685,6 +693,7 @@ export default function Page() {
       let finalResults = results;
 
       if (englishCcOnly) {
+        setPhase("selecting");
         const { rows: filtered, excludedNoCc, probesFailed } = await filterEnglishCcFromResults(
           results,
           maxResults
