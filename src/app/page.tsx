@@ -664,14 +664,28 @@ export default function Page() {
           englishCcOnly,
         }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: {
+        error?: string;
+        results?: Array<{ keyword: string; videos: YouTubeVideo[] }>;
+        totalExcluded?: number;
+      } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
       if (!res.ok) {
-        window.alert(typeof data.error === "string" ? data.error : "Search failed");
+        window.alert(
+          typeof data.error === "string"
+            ? data.error
+            : `Search failed (${res.status}). The server returned no details.`
+        );
         setPhase("input");
         return;
       }
 
-      const results: Array<{ keyword: string; videos: YouTubeVideo[] }> = data.results || [];
+      const results = data.results ?? [];
       const totalExcluded = Number(data.totalExcluded ?? 0);
       setLastSearchExcluded(totalExcluded);
 

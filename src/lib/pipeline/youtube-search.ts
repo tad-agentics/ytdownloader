@@ -37,18 +37,41 @@ function relevanceLanguageForRegion(regionCode: string): string {
   return REGION_LANGUAGE[regionCode.toUpperCase()] || "en";
 }
 
-function getApiKey(): string {
+function getApiKeys(): string[] {
   const keys = [
     process.env.YOUTUBE_API_KEY_1,
     process.env.YOUTUBE_API_KEY_2,
     process.env.YOUTUBE_API_KEY_3,
+    process.env.YOUTUBE_API_KEY,
   ].filter(Boolean) as string[];
-  if (keys.length > 0) {
-    return keys[Math.floor(Date.now() / 86_400_000) % keys.length];
+  return Array.from(new Set(keys));
+}
+
+function isQuotaError(message: string): boolean {
+  return /quota/i.test(message);
+}
+
+async function fetchYouTubeApi(path: string, params: Record<string, string>): Promise<Response> {
+  const keys = getApiKeys();
+  if (!keys.length) throw new Error("No YOUTUBE_API_KEY set");
+
+  const start = keys.length > 1 ? Math.floor(Date.now() / 86_400_000) % keys.length : 0;
+  const ordered = [...keys.slice(start), ...keys.slice(0, start)];
+
+  let lastError = "YouTube API request failed";
+
+  for (const key of ordered) {
+    const res = await fetch(`${BASE}/${path}?${new URLSearchParams({ ...params, key })}`);
+    if (res.ok) return res;
+
+    const body = await res.json().catch(() => ({}));
+    lastError =
+      (body as { error?: { message?: string } })?.error?.message || `YouTube API HTTP ${res.status}`;
+
+    if (!isQuotaError(lastError)) break;
   }
-  const single = process.env.YOUTUBE_API_KEY;
-  if (!single) throw new Error("No YOUTUBE_API_KEY set");
-  return single;
+
+  throw new Error(lastError);
 }
 
 function parseDuration(iso: string): number {
@@ -105,10 +128,8 @@ export async function searchYouTubeVideos(
     durationFilter > 0
       ? Math.min(Math.max(maxResults * 3, maxResults), 50)
       : Math.min(Math.max(maxResults * 2, maxResults), 50);
-  const key = getApiKey();
 
-  const sp = new URLSearchParams({
-    key,
+  const searchParams: Record<string, string> = {
     q: keyword,
     part: "snippet",
     type: "video",
@@ -118,23 +139,23 @@ export async function searchYouTubeVideos(
     order,
     videoDuration: apiDuration,
     videoEmbeddable: "true",
-  });
-  if (requireCaptions) sp.set("videoCaption", "closedCaption");
-  const sr = await fetch(`${BASE}/search?${sp}`);
-  if (!sr.ok) {
-    const e = await sr.json();
-    throw new Error(e.error?.message);
-  }
+  };
+  if (requireCaptions) searchParams.videoCaption = "closedCaption";
+
+  const sr = await fetchYouTubeApi("search", searchParams);
   const items: Array<{ id?: { videoId?: string }; snippet: Record<string, unknown> }> =
-    (await sr.json()).items || [];
+    ((await sr.json()) as { items?: typeof items }).items || [];
   if (!items.length) return [];
 
   const ids = items.map((i) => i.id?.videoId).filter(Boolean).join(",");
-  const dr = await fetch(
-    `${BASE}/videos?${new URLSearchParams({ key, id: ids, part: "snippet,statistics,contentDetails,status" })}`
-  );
+  const dr = await fetchYouTubeApi("videos", {
+    id: ids,
+    part: "snippet,statistics,contentDetails,status",
+  });
   const dm: Record<string, Record<string, unknown>> = {};
-  for (const v of (await dr.json()).items || []) dm[v.id as string] = v;
+  for (const v of ((await dr.json()) as { items?: Array<Record<string, unknown>> }).items || []) {
+    dm[v.id as string] = v;
+  }
 
   return items
     .map((item): YouTubeVideo | null => {
