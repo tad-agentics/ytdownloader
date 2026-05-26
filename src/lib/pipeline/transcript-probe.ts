@@ -31,7 +31,9 @@ function parseListSubsOutput(output: string): string[] {
 }
 
 function isBotBlockError(message: string): boolean {
-  return /not a bot|Sign in to confirm|bot check|HTTP Error 403/i.test(message);
+  return /not a bot|Sign in to confirm|bot check|HTTP Error 403|rate-limited|This content isn't available, try again later/i.test(
+    message
+  );
 }
 
 function runYtdlp(
@@ -111,7 +113,14 @@ async function runListSubsProbe(
   const { stdout, stderr } = await runYtdlp(args, videoId, timeoutMs, {
     allowNonZeroExit: true,
   });
-  const langs = parseListSubsOutput(`${stdout}\n${stderr}`);
+  const combined = `${stdout}\n${stderr}`;
+  if (isBotBlockError(combined)) {
+    throw new Error(combined.slice(0, 200));
+  }
+  const langs = parseListSubsOutput(combined);
+  if (!langs.length) {
+    throw new Error(`no subtitle languages listed for ${videoId}`);
+  }
   return pickEnglishLang(langs);
 }
 
@@ -167,7 +176,10 @@ export async function probeTranscriptAvailability(
   if (opts.fast) {
     try {
       const lang = await runProbeOnce(url, videoId, PLAYER_CLIENTS[0], FAST_PROBE_TIMEOUT_MS);
-      return { available: lang !== null, lang, checked: true };
+      if (lang === null) {
+        throw new Error(`no english captions confirmed for ${videoId}`);
+      }
+      return { available: true, lang, checked: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`Fast transcript probe failed for ${videoId}, retrying full probe: ${message}`);
@@ -182,7 +194,10 @@ export async function probeTranscriptAvailability(
     for (const clients of PLAYER_CLIENTS) {
       try {
         const lang = await runProbeOnce(url, videoId, clients, PROBE_TIMEOUT_MS);
-        return { available: lang !== null, lang, checked: true };
+        if (lang === null) {
+          return { available: false, lang: null, checked: true };
+        }
+        return { available: true, lang, checked: true };
       } catch (err: unknown) {
         lastError = err instanceof Error ? err.message : String(err);
         if (!isBotBlockError(lastError)) break;

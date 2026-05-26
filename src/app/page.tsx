@@ -546,6 +546,10 @@ export default function Page() {
             }
             if (keywordPicks.length >= perKeyword) break;
           }
+
+          if (i + BATCH * PARALLEL < toProbe.length && keywordPicks.length < perKeyword) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
         }
 
         if (keywordPicks.length) {
